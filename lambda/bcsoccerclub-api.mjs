@@ -19,7 +19,18 @@ const emptyState = {
     nextMatchAt: '',
     updatedAt: '',
     updatedBy: '',
+    captains: {
+      penny: '',
+      withoutPenny: '',
+    },
   },
+}
+
+function normalizeCaptains(captains) {
+  return {
+    penny: String(captains?.penny || ''),
+    withoutPenny: String(captains?.withoutPenny || ''),
+  }
 }
 
 const sanitizeTeam = (team) => (team === 'withoutPenny' ? 'withoutPenny' : 'penny')
@@ -56,6 +67,7 @@ function normalizeMatch(match) {
   return {
     ...emptyState.match,
     ...(match && typeof match === 'object' ? match : {}),
+    captains: normalizeCaptains(match?.captains),
   }
 }
 

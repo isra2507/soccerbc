@@ -43,6 +43,8 @@ const TEAM_LABELS = {
   withoutPenny: 'Team 2 (without penny)',
 }
 
+const TEAM_KEYS = ['penny', 'withoutPenny']
+
 const DATA_STATUS_LABELS = {
   cloud: 'Live online board',
   local: 'Local saved board',
@@ -128,6 +130,41 @@ const randomTeam = () => (Math.random() < 0.5 ? 'penny' : 'withoutPenny')
 
 const getSkillLabel = (value) =>
   SKILL_LEVELS.find((level) => level.value === value)?.label ?? value
+
+const getPlayerName = (player) => `${player.firstName} ${player.lastName}`
+
+const normalizeCaptains = (captains) => ({
+  penny: String(captains?.penny || ''),
+  withoutPenny: String(captains?.withoutPenny || ''),
+})
+
+const randomCaptainId = (players, teamKey) => {
+  const teamPlayers = players.filter((player) => player.team === teamKey)
+  if (teamPlayers.length === 0) {
+    return ''
+  }
+
+  return teamPlayers[Math.floor(Math.random() * teamPlayers.length)].id
+}
+
+const resolveCaptains = (players, captains) => {
+  const currentCaptains = normalizeCaptains(captains)
+
+  return TEAM_KEYS.reduce((nextCaptains, teamKey) => {
+    const hasCurrentCaptain = players.some(
+      (player) => player.team === teamKey && player.id === currentCaptains[teamKey],
+    )
+
+    nextCaptains[teamKey] = hasCurrentCaptain
+      ? currentCaptains[teamKey]
+      : randomCaptainId(players, teamKey)
+
+    return nextCaptains
+  }, {})
+}
+
+const captainsChanged = (currentCaptains, nextCaptains) =>
+  TEAM_KEYS.some((teamKey) => currentCaptains[teamKey] !== nextCaptains[teamKey])
 
 function useRoute() {
   const [route, setRoute] = useState(routeFromHash)
@@ -220,6 +257,7 @@ function App() {
   const [route, navigate] = useRoute()
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenuTimer = useRef(null)
+  const captainSyncing = useRef(false)
   const [darkMode, setDarkMode] = useState(
     () => window.localStorage.getItem(DARK_MODE_KEY) === 'true',
   )
@@ -269,6 +307,30 @@ function App() {
     )
   }, [])
 
+  useEffect(() => {
+    if (!rosterState.match || captainSyncing.current) {
+      return
+    }
+
+    const currentCaptains = normalizeCaptains(rosterState.match.captains)
+    const nextCaptains = resolveCaptains(rosterState.players, currentCaptains)
+
+    if (!captainsChanged(currentCaptains, nextCaptains)) {
+      return
+    }
+
+    captainSyncing.current = true
+    updateMatch({
+      ...rosterState.match,
+      captains: nextCaptains,
+    })
+      .then(refreshState)
+      .catch((error) => setDataError(error.message))
+      .finally(() => {
+        captainSyncing.current = false
+      })
+  }, [rosterState.match, rosterState.players])
+
   const teams = useMemo(
     () => ({
       penny: rosterState.players.filter((player) => player.team === 'penny'),
@@ -307,6 +369,10 @@ function App() {
         }}
         onAbout={() => {
           navigate('about')
+          setMenuOpen(false)
+        }}
+        onHome={() => {
+          navigate('home')
           setMenuOpen(false)
         }}
       />
@@ -375,11 +441,13 @@ function SideMenu({
   onAbout,
   onClose,
   onDarkModeToggle,
+  onHome,
   onPrimaryAction,
   onMenuEnter,
   onMenuLeave,
 }) {
   const isStaffRoute = route === 'staff'
+  const isAboutRoute = route === 'about'
 
   return (
     <>
@@ -426,8 +494,13 @@ function SideMenu({
           Close
         </button>
         <nav>
+          {isAboutRoute ? (
+            <button className="drawer-action" type="button" onClick={onHome}>
+              Home
+            </button>
+          ) : null}
           <button className="drawer-action primary" type="button" onClick={onPrimaryAction}>
-            {isStaffRoute ? '🏠 Home' : 'Member login'}
+            {isStaffRoute ? 'Home' : 'Member login'}
           </button>
           <button
             className="drawer-action mode-toggle"
@@ -457,6 +530,9 @@ function AboutPage() {
           A casual, co-ed student organization built around pickup soccer,
           community, and a shared love for the game.
         </p>
+        <a className="about-home-link" href="#/">
+          Home
+        </a>
       </section>
 
       <section className="about-members" aria-label="Club members">
@@ -536,7 +612,7 @@ function PublicPage({ dataError, match, refreshState, teams }) {
 
       <section className="main-grid" aria-label="Soccer signup and teams">
         <RegistrationForm refreshState={refreshState} />
-        <TeamTables teams={teams} />
+        <TeamTables captains={match?.captains} teams={teams} />
       </section>
 
       {dataError ? <p className="system-alert">{dataError}</p> : null}
@@ -646,20 +722,31 @@ function MatchCountdown({ match }) {
   )
 }
 
-function TeamTables({ teams, editable = false, onPlayerChange, onRemove }) {
+function TeamTables({
+  captains,
+  editable = false,
+  onCaptainChange,
+  onPlayerChange,
+  onRemove,
+  teams,
+}) {
   return (
     <div className="teams-panel">
       <TeamTable
+        captains={captains}
         players={teams.penny}
         teamKey="penny"
         editable={editable}
+        onCaptainChange={onCaptainChange}
         onPlayerChange={onPlayerChange}
         onRemove={onRemove}
       />
       <TeamTable
+        captains={captains}
         players={teams.withoutPenny}
         teamKey="withoutPenny"
         editable={editable}
+        onCaptainChange={onCaptainChange}
         onPlayerChange={onPlayerChange}
         onRemove={onRemove}
       />
@@ -667,14 +754,57 @@ function TeamTables({ teams, editable = false, onPlayerChange, onRemove }) {
   )
 }
 
-function TeamTable({ players, teamKey, editable, onPlayerChange, onRemove }) {
+function TeamTable({
+  captains,
+  editable,
+  onCaptainChange,
+  onPlayerChange,
+  onRemove,
+  players,
+  teamKey,
+}) {
   const targetTeam = teamKey === 'penny' ? 'withoutPenny' : 'penny'
   const moveLabel = teamKey === 'penny' ? 'Send to Team 2' : 'Send to Team 1'
+  const captainId = normalizeCaptains(captains)[teamKey]
+  const captain = players.find((player) => player.id === captainId)
+  let captainLabel = 'No players yet'
+
+  if (captain) {
+    captainLabel = getPlayerName(captain)
+  } else if (players.length) {
+    captainLabel = 'Selecting soon'
+  }
 
   return (
     <section className="team-table" aria-labelledby={`${teamKey}-title`}>
       <div className="table-title">
-        <h2 id={`${teamKey}-title`}>{TEAM_LABELS[teamKey]}</h2>
+        <div className="table-title-copy">
+          <h2 id={`${teamKey}-title`}>{TEAM_LABELS[teamKey]}</h2>
+          {editable ? (
+            <label className="captain-select">
+              <span>Captain</span>
+              <select
+                value={captainId}
+                disabled={players.length === 0}
+                onChange={(event) => onCaptainChange(teamKey, event.target.value)}
+              >
+                <option value="">
+                  {players.length === 0 ? 'No players yet' : 'Choose captain'}
+                </option>
+                {players.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    {getPlayerName(player)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="captain-line">
+              Captain:{' '}
+              <strong>{captainLabel}</strong>
+            </p>
+          )}
+        </div>
         <span>{players.length} players</span>
       </div>
       <div className="table-scroll">
@@ -992,6 +1122,26 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
     setSaving('Roster draft reset.')
   }
 
+  const handleCaptainChange = async (teamKey, playerId) => {
+    setSaving('Saving captain...')
+
+    try {
+      await updateMatch({
+        ...rosterState.match,
+        captains: {
+          ...normalizeCaptains(rosterState.match?.captains),
+          [teamKey]: playerId,
+        },
+        updatedAt: new Date().toISOString(),
+        updatedBy: `${staffName.firstName} ${staffName.lastName}`,
+      })
+      await refreshState()
+      setSaving('Captain updated.')
+    } catch (error) {
+      setSaving(error.message)
+    }
+  }
+
   const handleMatchSubmit = async (event) => {
     event.preventDefault()
 
@@ -1000,7 +1150,9 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
 
     try {
       await updateMatch({
+        ...rosterState.match,
         nextMatchAt,
+        captains: normalizeCaptains(rosterState.match?.captains),
         updatedAt: new Date().toISOString(),
         updatedBy: `${staffName.firstName} ${staffName.lastName}`,
       })
@@ -1065,8 +1217,10 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
         </section>
 
         <TeamTables
+          captains={rosterState.match?.captains}
           editable
           teams={teams}
+          onCaptainChange={handleCaptainChange}
           onPlayerChange={handlePlayerChange}
           onRemove={handleRemove}
         />

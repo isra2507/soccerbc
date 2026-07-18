@@ -25,7 +25,18 @@ const emptyState = {
     nextMatchAt: '',
     updatedAt: '',
     updatedBy: '',
+    captains: {
+      penny: '',
+      withoutPenny: '',
+    },
   },
+}
+
+function normalizeCaptains(captains) {
+  return {
+    penny: String(captains?.penny || ''),
+    withoutPenny: String(captains?.withoutPenny || ''),
+  }
 }
 
 const sanitizeTeam = (team) => (team === 'withoutPenny' ? 'withoutPenny' : 'penny')
@@ -66,6 +77,7 @@ function normalizeState(rawState) {
     match: {
       ...emptyState.match,
       ...(state.match && typeof state.match === 'object' ? state.match : {}),
+      captains: normalizeCaptains(state.match?.captains),
     },
     mode: hasSharedDatabase ? 'cloud' : requiresCloudDatabase ? 'missing-cloud' : 'local',
     message: requiresCloudDatabase ? sharedDatabaseRequiredMessage : '',
