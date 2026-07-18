@@ -49,6 +49,33 @@ const DATA_STATUS_LABELS = {
   'missing-cloud': 'Shared database needed',
 }
 
+const ABOUT_MEMBERS = [
+  {
+    name: 'Rodrigo',
+    role: 'Founder',
+    story:
+      'When Rodrigo first arrived from Mexico, one of the first things he did was head straight to the soccer field. Back home, soccer was woven into daily life. You did not need an official league or an intense tryout. You just showed up with a ball, and a game happened naturally. But when he got to the fields at Bellevue College, he was surprised to find that casual, drop-in pickup culture did not really exist on campus.',
+    impact:
+      'He missed the game constantly, and the urge to play was strong enough that he realized if he wanted that environment, he would have to build it himself. That is how Bellevue College Soccer Club started. What began as a way to find people to play with became something bigger: a casual, co-ed student community where students can escape class stress, touch grass, and connect through a shared love for the game without high-stakes pressure.',
+  },
+  {
+    name: 'Jonathan',
+    role: 'Marketing',
+    story:
+      'Jonathan is the voice of the club on campus. He handles physical and digital outreach, designs flyers, and finds creative ways to get the club name out there.',
+    impact:
+      'His work helps make sure every Bellevue College student knows the club exists and feels invited to join.',
+  },
+  {
+    name: 'Lekhana',
+    role: 'Social Media',
+    story:
+      'Lekhana drives the club digital presence. She captures the energy of pickup games through photos and videos, manages the social accounts, and keeps the community connected.',
+    impact:
+      'She helps members stay engaged and informed about when and where the club is playing next.',
+  },
+]
+
 const routeFromHash = () => {
   const path = window.location.hash.replace('#', '')
 
@@ -397,7 +424,31 @@ function SideMenu({
 }
 
 function AboutPage() {
-  return <main className="about-page" aria-label="About"></main>
+  return (
+    <main className="about-page" aria-label="About Bellevue College Soccer Club">
+      <section className="about-hero">
+        <p className="eyebrow">About the club</p>
+        <h1>Bellevue College Soccer Club</h1>
+        <p>
+          A casual, co-ed student organization built around pickup soccer,
+          community, and a shared love for the game.
+        </p>
+      </section>
+
+      <section className="about-members" aria-label="Club members">
+        {ABOUT_MEMBERS.map((member) => (
+          <article className="about-member-card" key={member.name}>
+            <div>
+              <p className="section-kicker">{member.role}</p>
+              <h2>{member.name}</h2>
+            </div>
+            <p>{member.story}</p>
+            <p>{member.impact}</p>
+          </article>
+        ))}
+      </section>
+    </main>
+  )
 }
 
 function SoccerBallRain() {
