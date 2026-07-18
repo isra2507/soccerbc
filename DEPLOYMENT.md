@@ -36,14 +36,16 @@ The deploy job stays skipped until `AWS_DEPLOY_ENABLED` is set to `true`.
 
 ## Shared Roster Storage
 
-The public CloudFront site must use Firebase Realtime Database so roster and
-match-date changes sync across phones, laptops, and other devices.
+The public CloudFront site uses an AWS API Gateway + Lambda + DynamoDB backend
+so roster and match-date changes sync across phones, laptops, and other devices.
 
-Add these GitHub Actions repository variables:
+Current AWS backend resources:
 
-- `VITE_FIREBASE_DATABASE_URL`: your Firebase Realtime Database URL
-- `VITE_FIREBASE_DATA_PATH`: `bc-soccer-club`
+- API Gateway invoke URL: `https://6oumqshk75.execute-api.us-east-1.amazonaws.com`
+- Lambda function: `bcsoccerclub-api`
+- DynamoDB table: `bcsoccerclub-state`
+- DynamoDB partition key: `pk`
+- Lambda environment variable: `TABLE_NAME=bcsoccerclub-state`
 
-If `VITE_FIREBASE_DATABASE_URL` is missing, the deployed site will warn that the
-shared database is not configured instead of saving separate local copies per
-device.
+The frontend build uses `VITE_API_BASE_URL` from `.github/workflows/deploy.yml`.
+The Lambda source to paste into AWS is saved at `lambda/bcsoccerclub-api.mjs`.

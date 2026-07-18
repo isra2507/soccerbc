@@ -1,5 +1,6 @@
 const LOCAL_STORAGE_KEY = 'bc-soccer-live-board'
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/g, '')
 const firebaseDatabaseUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL?.trim()
 const firebaseDataPath = (
   import.meta.env.VITE_FIREBASE_DATA_PATH || 'bc-soccer-club'
@@ -7,14 +8,16 @@ const firebaseDataPath = (
   .trim()
   .replace(/^\/+|\/+$/g, '')
 
-const hasCloudDatabase = Boolean(firebaseDatabaseUrl)
+const hasApiBackend = Boolean(apiBaseUrl)
+const hasFirebaseDatabase = Boolean(firebaseDatabaseUrl)
+const hasSharedDatabase = hasApiBackend || hasFirebaseDatabase
 const isLocalRuntime =
   typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
 const requiresCloudDatabase =
-  import.meta.env.PROD && !hasCloudDatabase && !isLocalRuntime
+  import.meta.env.PROD && !hasSharedDatabase && !isLocalRuntime
 const sharedDatabaseRequiredMessage =
-  'Shared database is not configured. Add VITE_FIREBASE_DATABASE_URL in GitHub Actions variables and redeploy so roster and match changes sync across devices.'
+  'Shared database is not configured. Add VITE_API_BASE_URL in GitHub Actions variables and redeploy so roster and match changes sync across devices.'
 
 const emptyState = {
   players: [],
@@ -64,7 +67,7 @@ function normalizeState(rawState) {
       ...emptyState.match,
       ...(state.match && typeof state.match === 'object' ? state.match : {}),
     },
-    mode: hasCloudDatabase ? 'cloud' : requiresCloudDatabase ? 'missing-cloud' : 'local',
+    mode: hasSharedDatabase ? 'cloud' : requiresCloudDatabase ? 'missing-cloud' : 'local',
     message: requiresCloudDatabase ? sharedDatabaseRequiredMessage : '',
   }
 }
@@ -103,6 +106,45 @@ function firebaseUrl(path = '') {
   const fullPath = [encodedPath, encodedChildPath].filter(Boolean).join('/')
 
   return `${root}/${fullPath}.json`
+}
+
+function apiUrl(path = '') {
+  return `${apiBaseUrl}/${path.replace(/^\/+/g, '')}`
+}
+
+async function readJsonResponse(response, fallbackMessage) {
+  const text = await response.text()
+  let payload = null
+
+  if (text) {
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      throw new Error(fallbackMessage)
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.message || fallbackMessage)
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error(fallbackMessage)
+  }
+
+  return payload
+}
+
+async function apiRequest(method, path, body) {
+  const response = await fetch(apiUrl(path), {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+
+  return readJsonResponse(response, 'AWS roster API returned an invalid response.')
 }
 
 async function firebaseRequest(method, path, body) {
@@ -152,6 +194,21 @@ async function seedCloudFromLocalIfEmpty(cloudState) {
   return normalizeState(migratedState)
 }
 
+async function seedApiFromLocalIfEmpty(apiState) {
+  if (hasBoardContent(apiState)) {
+    return apiState
+  }
+
+  const localState = getLocalState()
+  if (!hasBoardContent(localState)) {
+    return apiState
+  }
+
+  await apiRequest('PUT', '/players', localState.players)
+  await apiRequest('PUT', '/match', localState.match)
+  return normalizeState(localState)
+}
+
 function assertWritableStorage() {
   if (requiresCloudDatabase) {
     throw new Error(sharedDatabaseRequiredMessage)
@@ -159,7 +216,12 @@ function assertWritableStorage() {
 }
 
 export async function loadState() {
-  if (!hasCloudDatabase) {
+  if (hasApiBackend) {
+    const state = await apiRequest('GET', '/state')
+    return seedApiFromLocalIfEmpty(normalizeState(state))
+  }
+
+  if (!hasFirebaseDatabase) {
     if (requiresCloudDatabase) {
       return normalizeState(emptyState)
     }
@@ -174,7 +236,12 @@ export async function loadState() {
 export async function addPlayer(player) {
   assertWritableStorage()
 
-  if (!hasCloudDatabase) {
+  if (hasApiBackend) {
+    await apiRequest('POST', '/players', player)
+    return
+  }
+
+  if (!hasFirebaseDatabase) {
     const current = getLocalState()
     setLocalState({
       ...current,
@@ -189,7 +256,12 @@ export async function addPlayer(player) {
 export async function replacePlayers(players) {
   assertWritableStorage()
 
-  if (!hasCloudDatabase) {
+  if (hasApiBackend) {
+    await apiRequest('PUT', '/players', players)
+    return
+  }
+
+  if (!hasFirebaseDatabase) {
     const current = getLocalState()
     setLocalState({
       ...current,
@@ -204,7 +276,12 @@ export async function replacePlayers(players) {
 export async function updateMatch(match) {
   assertWritableStorage()
 
-  if (!hasCloudDatabase) {
+  if (hasApiBackend) {
+    await apiRequest('PUT', '/match', match)
+    return
+  }
+
+  if (!hasFirebaseDatabase) {
     const current = getLocalState()
     setLocalState({
       ...current,
@@ -240,7 +317,7 @@ export function subscribeState(onChange, onError) {
     }
   }
 
-  const interval = hasCloudDatabase ? window.setInterval(refresh, 4000) : null
+  const interval = hasSharedDatabase ? window.setInterval(refresh, 4000) : null
   window.addEventListener('storage', storageHandler)
 
   return () => {

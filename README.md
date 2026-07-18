@@ -12,38 +12,25 @@ npm run dev
 
 The app works locally with `localStorage` if no database is configured.
 
-## Make saved names public online
+## Make Saved Names Public Online
 
-The deployed site needs a shared database for phones, laptops, and other
-devices to see the same roster and match date. Without this value, local
-development uses `localStorage`, but the production site shows a shared database
-configuration warning instead of saving different copies per device.
+The deployed site uses an AWS API Gateway + Lambda + DynamoDB backend so phones,
+laptops, and other devices see the same roster and match date.
 
-Create a Firebase Realtime Database and add this GitHub Actions repository
-variable:
+The production GitHub Actions workflow builds with:
 
 ```bash
-VITE_FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
+VITE_API_BASE_URL=https://6oumqshk75.execute-api.us-east-1.amazonaws.com
 ```
 
-Optional GitHub Actions repository variable:
+Local development still uses `localStorage` if `VITE_API_BASE_URL` is not set.
+To test the shared AWS backend locally, create `.env.local` with:
 
 ```bash
-VITE_FIREBASE_DATA_PATH=bc-soccer-club
+VITE_API_BASE_URL=https://6oumqshk75.execute-api.us-east-1.amazonaws.com
 ```
 
-For a simple public board, Firebase rules can allow public reads and writes:
-
-```json
-{
-  "rules": {
-    "bc-soccer-club": {
-      ".read": true,
-      ".write": true
-    }
-  }
-}
-```
+The Lambda source to paste into AWS is saved at `lambda/bcsoccerclub-api.mjs`.
 
 The staff password in the frontend is:
 

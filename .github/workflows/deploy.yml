@@ -14,8 +14,7 @@ env:
   AWS_REGION: us-east-1
   S3_BUCKET: bcsoccerclub
   CLOUDFRONT_DISTRIBUTION_ID: E2ROO7A769UCO2
-  VITE_FIREBASE_DATABASE_URL: ${{ vars.VITE_FIREBASE_DATABASE_URL }}
-  VITE_FIREBASE_DATA_PATH: ${{ vars.VITE_FIREBASE_DATA_PATH || 'bc-soccer-club' }}
+  VITE_API_BASE_URL: https://6oumqshk75.execute-api.us-east-1.amazonaws.com
 
 jobs:
   deploy:
