@@ -789,7 +789,7 @@ table {
 }
 
 .staff-page table {
-  min-width: 860px;
+  min-width: 760px;
 }
 
 th,
@@ -1019,6 +1019,12 @@ tr:last-child td {
 .icon-text-button {
   min-height: 38px;
   padding: 0 10px;
+}
+
+.move-team-button {
+  min-width: 138px;
+  color: #075985;
+  background: rgba(224, 242, 254, 0.72);
 }
 
 .icon-text-button.danger {

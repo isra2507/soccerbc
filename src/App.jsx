@@ -593,6 +593,9 @@ function TeamTables({ teams, editable = false, onPlayerChange, onRemove }) {
 }
 
 function TeamTable({ players, teamKey, editable, onPlayerChange, onRemove }) {
+  const targetTeam = teamKey === 'penny' ? 'withoutPenny' : 'penny'
+  const moveLabel = teamKey === 'penny' ? 'Send to Team 2' : 'Send to Team 1'
+
   return (
     <section className="team-table" aria-labelledby={`${teamKey}-title`}>
       <div className="table-title">
@@ -606,7 +609,7 @@ function TeamTable({ players, teamKey, editable, onPlayerChange, onRemove }) {
               <th>No.</th>
               <th>Name</th>
               <th>Skill level</th>
-              {editable ? <th>Team</th> : null}
+              {editable ? <th>Move</th> : null}
               {editable ? <th>Remove</th> : null}
             </tr>
           </thead>
@@ -669,17 +672,14 @@ function TeamTable({ players, teamKey, editable, onPlayerChange, onRemove }) {
                     )}
                   </td>
                   {editable ? (
-                    <td data-label="Team">
-                      <select
-                        aria-label="Team"
-                        value={player.team}
-                        onChange={(event) =>
-                          onPlayerChange(player.id, { team: event.target.value })
-                        }
+                    <td data-label="Move">
+                      <button
+                        className="icon-text-button move-team-button"
+                        type="button"
+                        onClick={() => onPlayerChange(player.id, { team: targetTeam })}
                       >
-                        <option value="penny">{TEAM_LABELS.penny}</option>
-                        <option value="withoutPenny">{TEAM_LABELS.withoutPenny}</option>
-                      </select>
+                        {moveLabel}
+                      </button>
                     </td>
                   ) : null}
                   {editable ? (
