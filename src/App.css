@@ -144,8 +144,8 @@
 }
 
 .logo-brand {
-  width: 520px;
-  height: 60px;
+  width: min(320px, calc(100vw - 112px));
+  height: 54px;
   overflow: visible;
   border-radius: 8px;
   background: transparent;
@@ -155,8 +155,8 @@
 .logo-brand img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center 49%;
+  object-fit: contain;
+  object-position: left center;
   filter:
     drop-shadow(1px 0 0 rgba(255, 255, 255, 0.95))
     drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.95))
@@ -1281,8 +1281,8 @@ tr:last-child td {
   }
 
   .logo-brand {
-    width: min(360px, calc(100vw - 76px));
-    height: 54px;
+    width: min(250px, calc(100vw - 72px));
+    height: 46px;
   }
 
   .brand strong {
