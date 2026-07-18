@@ -1,0 +1,205 @@
+const LOCAL_STORAGE_KEY = 'bc-soccer-live-board'
+
+const firebaseDatabaseUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL?.trim()
+const firebaseDataPath = (
+  import.meta.env.VITE_FIREBASE_DATA_PATH || 'bc-soccer-club'
+)
+  .trim()
+  .replace(/^\/+|\/+$/g, '')
+
+const hasCloudDatabase = Boolean(firebaseDatabaseUrl)
+
+const emptyState = {
+  players: [],
+  match: {
+    nextMatchAt: '',
+    updatedAt: '',
+    updatedBy: '',
+  },
+}
+
+const sanitizeTeam = (team) => (team === 'withoutPenny' ? 'withoutPenny' : 'penny')
+
+const sanitizePlayer = (player, fallbackId) => ({
+  id: String(player?.id || fallbackId),
+  firstName: String(player?.firstName || '').trim(),
+  lastName: String(player?.lastName || '').trim(),
+  skill: String(player?.skill || 'beginner'),
+  team: sanitizeTeam(player?.team),
+  joinedAt: String(player?.joinedAt || ''),
+  updatedAt: String(player?.updatedAt || ''),
+  updatedBy: String(player?.updatedBy || ''),
+})
+
+function normalizePlayers(players) {
+  if (!players) {
+    return []
+  }
+
+  if (Array.isArray(players)) {
+    return players
+      .map((player, index) => sanitizePlayer(player, player?.id || `player-${index}`))
+      .filter((player) => player.firstName && player.lastName)
+  }
+
+  return Object.entries(players)
+    .map(([id, player]) => sanitizePlayer(player, id))
+    .filter((player) => player.firstName && player.lastName)
+    .sort((a, b) => (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id))
+}
+
+function normalizeState(rawState) {
+  const state = rawState && typeof rawState === 'object' ? rawState : emptyState
+
+  return {
+    players: normalizePlayers(state.players),
+    match: {
+      ...emptyState.match,
+      ...(state.match && typeof state.match === 'object' ? state.match : {}),
+    },
+    mode: hasCloudDatabase ? 'cloud' : 'local',
+  }
+}
+
+function getLocalState() {
+  try {
+    const saved = window.localStorage.getItem(LOCAL_STORAGE_KEY)
+    return normalizeState(saved ? JSON.parse(saved) : emptyState)
+  } catch {
+    return normalizeState(emptyState)
+  }
+}
+
+function setLocalState(nextState) {
+  window.localStorage.setItem(
+    LOCAL_STORAGE_KEY,
+    JSON.stringify({
+      players: nextState.players,
+      match: nextState.match,
+    }),
+  )
+}
+
+function firebaseUrl(path = '') {
+  const root = firebaseDatabaseUrl.replace(/\/+$/g, '')
+  const encodedPath = firebaseDataPath
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/')
+  const encodedChildPath = path
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/')
+  const fullPath = [encodedPath, encodedChildPath].filter(Boolean).join('/')
+
+  return `${root}/${fullPath}.json`
+}
+
+async function firebaseRequest(method, path, body) {
+  const response = await fetch(firebaseUrl(path), {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Database request failed: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+function playersToRecord(players) {
+  return players.reduce((record, player) => {
+    record[player.id] = player
+    return record
+  }, {})
+}
+
+export async function loadState() {
+  if (!hasCloudDatabase) {
+    return getLocalState()
+  }
+
+  const state = await firebaseRequest('GET', '')
+  return normalizeState(state)
+}
+
+export async function addPlayer(player) {
+  if (!hasCloudDatabase) {
+    const current = getLocalState()
+    setLocalState({
+      ...current,
+      players: [...current.players, player],
+    })
+    return
+  }
+
+  await firebaseRequest('PUT', `players/${player.id}`, player)
+}
+
+export async function replacePlayers(players) {
+  if (!hasCloudDatabase) {
+    const current = getLocalState()
+    setLocalState({
+      ...current,
+      players,
+    })
+    return
+  }
+
+  await firebaseRequest('PUT', 'players', playersToRecord(players))
+}
+
+export async function updateMatch(match) {
+  if (!hasCloudDatabase) {
+    const current = getLocalState()
+    setLocalState({
+      ...current,
+      match,
+    })
+    return
+  }
+
+  await firebaseRequest('PUT', 'match', match)
+}
+
+export function subscribeState(onChange, onError) {
+  let active = true
+
+  const refresh = async () => {
+    try {
+      const state = await loadState()
+      if (active) {
+        onChange(state)
+      }
+    } catch (error) {
+      if (active) {
+        onError(error)
+      }
+    }
+  }
+
+  refresh()
+
+  const storageHandler = (event) => {
+    if (event.key === LOCAL_STORAGE_KEY) {
+      refresh()
+    }
+  }
+
+  const interval = hasCloudDatabase ? window.setInterval(refresh, 4000) : null
+  window.addEventListener('storage', storageHandler)
+
+  return () => {
+    active = false
+    if (interval) {
+      window.clearInterval(interval)
+    }
+    window.removeEventListener('storage', storageHandler)
+  }
+}
