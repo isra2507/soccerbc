@@ -43,8 +43,19 @@ const TEAM_LABELS = {
   withoutPenny: 'Team 2 (without penny)',
 }
 
-const routeFromHash = () =>
-  window.location.hash.replace('#', '') === '/staff' ? 'staff' : 'home'
+const routeFromHash = () => {
+  const path = window.location.hash.replace('#', '')
+
+  if (path === '/staff') {
+    return 'staff'
+  }
+
+  if (path === '/about') {
+    return 'about'
+  }
+
+  return 'home'
+}
 
 const normalizeName = (value) => value.trim().replace(/\s+/g, ' ')
 
@@ -71,7 +82,8 @@ function useRoute() {
   }, [])
 
   const navigate = (nextRoute) => {
-    window.location.hash = nextRoute === 'staff' ? '/staff' : '/'
+    window.location.hash =
+      nextRoute === 'staff' ? '/staff' : nextRoute === 'about' ? '/about' : '/'
     setRoute(nextRoute)
   }
 
@@ -226,7 +238,7 @@ function App() {
       />
       <SideMenu
         darkMode={darkMode}
-        isStaffRoute={route === 'staff'}
+        route={route}
         open={menuOpen}
         onDarkModeToggle={() => setDarkMode((enabled) => !enabled)}
         onClose={() => setMenuOpen(false)}
@@ -234,6 +246,10 @@ function App() {
         onMenuLeave={scheduleMenuClose}
         onPrimaryAction={() => {
           navigate(route === 'staff' ? 'home' : 'staff')
+          setMenuOpen(false)
+        }}
+        onAbout={() => {
+          navigate('about')
           setMenuOpen(false)
         }}
       />
@@ -244,6 +260,8 @@ function App() {
           refreshState={refreshState}
           onBack={() => navigate('home')}
         />
+      ) : route === 'about' ? (
+        <AboutPage />
       ) : (
         <PublicPage
           dataError={dataError}
@@ -295,14 +313,17 @@ function Header({ dataStatus, menuOpen, onMenuEnter, onMenuLeave, onMenuToggle }
 
 function SideMenu({
   darkMode,
-  isStaffRoute,
+  route,
   open,
+  onAbout,
   onClose,
   onDarkModeToggle,
   onPrimaryAction,
   onMenuEnter,
   onMenuLeave,
 }) {
+  const isStaffRoute = route === 'staff'
+
   return (
     <>
       <button
@@ -360,13 +381,17 @@ function SideMenu({
             <span>Dark mode</span>
             <strong>{darkMode ? 'On' : 'Off'}</strong>
           </button>
-          <button className="drawer-action" type="button" disabled>
+          <button className="drawer-action" type="button" onClick={onAbout}>
             About
           </button>
         </nav>
       </aside>
     </>
   )
+}
+
+function AboutPage() {
+  return <main className="about-page" aria-label="About"></main>
 }
 
 function SoccerBallRain() {
