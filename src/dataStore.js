@@ -8,6 +8,13 @@ const firebaseDataPath = (
   .replace(/^\/+|\/+$/g, '')
 
 const hasCloudDatabase = Boolean(firebaseDatabaseUrl)
+const isLocalRuntime =
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+const requiresCloudDatabase =
+  import.meta.env.PROD && !hasCloudDatabase && !isLocalRuntime
+const sharedDatabaseRequiredMessage =
+  'Shared database is not configured. Add VITE_FIREBASE_DATABASE_URL in GitHub Actions variables and redeploy so roster and match changes sync across devices.'
 
 const emptyState = {
   players: [],
@@ -57,7 +64,8 @@ function normalizeState(rawState) {
       ...emptyState.match,
       ...(state.match && typeof state.match === 'object' ? state.match : {}),
     },
-    mode: hasCloudDatabase ? 'cloud' : 'local',
+    mode: hasCloudDatabase ? 'cloud' : requiresCloudDatabase ? 'missing-cloud' : 'local',
+    message: requiresCloudDatabase ? sharedDatabaseRequiredMessage : '',
   }
 }
 
@@ -120,16 +128,52 @@ function playersToRecord(players) {
   }, {})
 }
 
+function hasBoardContent(state) {
+  return state.players.length > 0 || Boolean(state.match?.nextMatchAt)
+}
+
+async function seedCloudFromLocalIfEmpty(cloudState) {
+  if (hasBoardContent(cloudState)) {
+    return cloudState
+  }
+
+  const localState = getLocalState()
+  if (!hasBoardContent(localState)) {
+    return cloudState
+  }
+
+  const migratedState = {
+    players: playersToRecord(localState.players),
+    match: localState.match,
+    migratedAt: new Date().toISOString(),
+  }
+
+  await firebaseRequest('PUT', '', migratedState)
+  return normalizeState(migratedState)
+}
+
+function assertWritableStorage() {
+  if (requiresCloudDatabase) {
+    throw new Error(sharedDatabaseRequiredMessage)
+  }
+}
+
 export async function loadState() {
   if (!hasCloudDatabase) {
+    if (requiresCloudDatabase) {
+      return normalizeState(emptyState)
+    }
+
     return getLocalState()
   }
 
   const state = await firebaseRequest('GET', '')
-  return normalizeState(state)
+  return seedCloudFromLocalIfEmpty(normalizeState(state))
 }
 
 export async function addPlayer(player) {
+  assertWritableStorage()
+
   if (!hasCloudDatabase) {
     const current = getLocalState()
     setLocalState({
@@ -143,6 +187,8 @@ export async function addPlayer(player) {
 }
 
 export async function replacePlayers(players) {
+  assertWritableStorage()
+
   if (!hasCloudDatabase) {
     const current = getLocalState()
     setLocalState({
@@ -156,6 +202,8 @@ export async function replacePlayers(players) {
 }
 
 export async function updateMatch(match) {
+  assertWritableStorage()
+
   if (!hasCloudDatabase) {
     const current = getLocalState()
     setLocalState({

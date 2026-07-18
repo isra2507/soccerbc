@@ -43,6 +43,12 @@ const TEAM_LABELS = {
   withoutPenny: 'Team 2 (without penny)',
 }
 
+const DATA_STATUS_LABELS = {
+  cloud: 'Live online board',
+  local: 'Local saved board',
+  'missing-cloud': 'Shared database needed',
+}
+
 const routeFromHash = () => {
   const path = window.location.hash.replace('#', '')
 
@@ -202,8 +208,8 @@ function App() {
     return subscribeState(
       (nextState) => {
         setRosterState(nextState)
-        setDataStatus(nextState.mode === 'cloud' ? 'Live online board' : 'Local saved board')
-        setDataError('')
+        setDataStatus(DATA_STATUS_LABELS[nextState.mode] ?? 'Team board loaded')
+        setDataError(nextState.message ?? '')
       },
       (error) => {
         setDataStatus('Connection issue')
@@ -862,18 +868,23 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
 
   const savePlayers = async (players, message = 'Roster updated.') => {
     setSaving('Saving changes...')
-    await replacePlayers(
-      players.map((player) => ({
-        ...player,
-        firstName: normalizeName(player.firstName),
-        lastName: normalizeName(player.lastName),
-        updatedAt: new Date().toISOString(),
-        updatedBy: `${staffName.firstName} ${staffName.lastName}`,
-      })),
-    )
-    setRosterDirty(false)
-    await refreshState()
-    setSaving(message)
+
+    try {
+      await replacePlayers(
+        players.map((player) => ({
+          ...player,
+          firstName: normalizeName(player.firstName),
+          lastName: normalizeName(player.lastName),
+          updatedAt: new Date().toISOString(),
+          updatedBy: `${staffName.firstName} ${staffName.lastName}`,
+        })),
+      )
+      setRosterDirty(false)
+      await refreshState()
+      setSaving(message)
+    } catch (error) {
+      setSaving(error.message)
+    }
   }
 
   const handlePlayerChange = (playerId, changes) => {
@@ -911,13 +922,18 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
 
     const nextMatchAt = matchDate ? new Date(matchDate).toISOString() : ''
     setSaving('Saving soccer date...')
-    await updateMatch({
-      nextMatchAt,
-      updatedAt: new Date().toISOString(),
-      updatedBy: `${staffName.firstName} ${staffName.lastName}`,
-    })
-    await refreshState()
-    setSaving('Soccer date updated.')
+
+    try {
+      await updateMatch({
+        nextMatchAt,
+        updatedAt: new Date().toISOString(),
+        updatedBy: `${staffName.firstName} ${staffName.lastName}`,
+      })
+      await refreshState()
+      setSaving('Soccer date updated.')
+    } catch (error) {
+      setSaving(error.message)
+    }
   }
 
   return (

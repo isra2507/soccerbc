@@ -33,3 +33,17 @@ Before enabling automatic deploys:
 4. In GitHub, add an Actions variable named `AWS_DEPLOY_ENABLED` with value `true`.
 
 The deploy job stays skipped until `AWS_DEPLOY_ENABLED` is set to `true`.
+
+## Shared Roster Storage
+
+The public CloudFront site must use Firebase Realtime Database so roster and
+match-date changes sync across phones, laptops, and other devices.
+
+Add these GitHub Actions repository variables:
+
+- `VITE_FIREBASE_DATABASE_URL`: your Firebase Realtime Database URL
+- `VITE_FIREBASE_DATA_PATH`: `bc-soccer-club`
+
+If `VITE_FIREBASE_DATABASE_URL` is missing, the deployed site will warn that the
+shared database is not configured instead of saving separate local copies per
+device.

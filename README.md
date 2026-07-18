@@ -14,14 +14,19 @@ The app works locally with `localStorage` if no database is configured.
 
 ## Make saved names public online
 
-For deployment, create a Firebase Realtime Database and set this environment
-variable in your hosting provider:
+The deployed site needs a shared database for phones, laptops, and other
+devices to see the same roster and match date. Without this value, local
+development uses `localStorage`, but the production site shows a shared database
+configuration warning instead of saving different copies per device.
+
+Create a Firebase Realtime Database and add this GitHub Actions repository
+variable:
 
 ```bash
 VITE_FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
 ```
 
-Optional:
+Optional GitHub Actions repository variable:
 
 ```bash
 VITE_FIREBASE_DATA_PATH=bc-soccer-club
