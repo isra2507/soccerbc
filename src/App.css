@@ -13,7 +13,7 @@
   position: relative;
   isolation: isolate;
   min-height: 100svh;
-  padding-top: 84px;
+  padding-top: 72px;
   overflow-x: hidden;
   color: var(--ink);
   background:
@@ -85,8 +85,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 84px;
-  padding: 8px 40px;
+  min-height: 72px;
+  padding: 6px 40px;
   border-bottom: 1px solid rgba(14, 116, 144, 0.16);
   background:
     radial-gradient(ellipse 46% 150% at 50% 116%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 62%),
@@ -144,8 +144,8 @@
 }
 
 .logo-brand {
-  width: min(520px, calc(100vw - 116px));
-  height: 68px;
+  width: 150px;
+  height: 44px;
   overflow: visible;
   border-radius: 8px;
   background: transparent;
@@ -1269,7 +1269,7 @@ tr:last-child td {
   }
 
   .site-header {
-    min-height: 76px;
+    min-height: 68px;
     padding: 5px 22px;
   }
 
@@ -1316,11 +1316,11 @@ tr:last-child td {
 
 @media (max-width: 640px) {
   .app-shell {
-    padding-top: 72px;
+    padding-top: 64px;
   }
 
   .site-header {
-    min-height: 72px;
+    min-height: 64px;
     padding: 4px 10px;
   }
 
@@ -1334,8 +1334,8 @@ tr:last-child td {
   }
 
   .logo-brand {
-    width: min(310px, calc(100vw - 70px));
-    height: 60px;
+    width: 138px;
+    height: 42px;
   }
 
   .brand strong {
