@@ -1023,8 +1023,10 @@ tr:last-child td {
 
 .move-team-button {
   min-width: 138px;
-  color: #075985;
-  background: rgba(224, 242, 254, 0.72);
+  border-color: rgba(14, 165, 233, 0.86);
+  color: #ffffff;
+  background: #0284c7;
+  box-shadow: 0 10px 22px rgba(2, 132, 199, 0.2);
 }
 
 .icon-text-button.danger {
