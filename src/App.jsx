@@ -61,6 +61,14 @@ const ABOUT_MEMBERS = [
       'As president, Rodrigo oversees the big picture and keeps the club moving in the right direction. He coordinates meeting times, makes sure pickup sessions run smoothly and safely on the field, and focuses on keeping the club welcoming and inclusive for players of all skill levels. He likes to think of himself as the conductor of the orchestra.',
   },
   {
+    name: 'Rafael',
+    role: 'Event Planner',
+    story:
+      'Rafael helps with the logistics of the club, especially when the club is planning events and getting everything ready before members arrive.',
+    impact:
+      'He helps organize events and makes sure everything runs smoothly during them so players and members can focus on enjoying the club.',
+  },
+  {
     name: 'Kc',
     role: 'Vice President',
     story:
