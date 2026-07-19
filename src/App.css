@@ -90,10 +90,8 @@
   min-height: 72px;
   overflow: hidden;
   padding: 6px 40px;
-  border-bottom: 1px solid rgba(14, 116, 144, 0.16);
-  background:
-    radial-gradient(ellipse 46% 150% at 50% 116%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 62%),
-    linear-gradient(100deg, rgba(186, 230, 253, 0.94), rgba(220, 252, 231, 0.92));
+  border-bottom: 1px solid transparent;
+  background: transparent;
   box-shadow: 0 14px 42px rgba(2, 132, 199, 0.1);
   backdrop-filter: blur(16px);
   isolation: isolate;
@@ -103,18 +101,28 @@
     border-color 200ms ease;
 }
 
-.site-header::after {
+.site-header::before {
   position: absolute;
-  top: 100%;
-  right: 0;
-  left: 0;
+  inset: 0;
   z-index: 0;
-  height: 110px;
   content: '';
   background:
-    radial-gradient(88% 122px at 50% -22px, rgba(224, 242, 254, 0.88) 0%, rgba(224, 242, 254, 0.48) 56%, rgba(224, 242, 254, 0) 82%),
-    linear-gradient(to bottom, rgba(224, 242, 254, 0.46), rgba(224, 242, 254, 0));
-  clip-path: ellipse(78% 70% at 50% 0%);
+    radial-gradient(ellipse 46% 150% at 50% 116%, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(100deg, rgba(186, 230, 253, 0.94), rgba(220, 252, 231, 0.92));
+  mask-image: linear-gradient(to bottom, #000 0%, #000 58%, rgba(0, 0, 0, 0.68) 78%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 58%, rgba(0, 0, 0, 0.68) 78%, transparent 100%);
+  pointer-events: none;
+}
+
+.site-header::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  height: 30px;
+  content: '';
+  background: linear-gradient(to bottom, rgba(224, 242, 254, 0.2), rgba(224, 242, 254, 0));
   pointer-events: none;
 }
 
@@ -124,17 +132,18 @@
 }
 
 .dark-mode .site-header {
-  border-bottom-color: rgba(216, 180, 254, 0.3);
-  background:
-    radial-gradient(ellipse 46% 150% at 50% 116%, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 62%),
-    linear-gradient(100deg, rgba(114, 0, 15, 0.94), rgba(83, 32, 143, 0.92));
+  border-bottom-color: transparent;
   box-shadow: 0 14px 42px rgba(88, 28, 135, 0.24);
 }
 
-.dark-mode .site-header::after {
+.dark-mode .site-header::before {
   background:
-    radial-gradient(88% 122px at 50% -22px, rgba(88, 28, 135, 0.62) 0%, rgba(88, 28, 135, 0.34) 56%, rgba(88, 28, 135, 0) 82%),
-    linear-gradient(to bottom, rgba(88, 28, 135, 0.3), rgba(88, 28, 135, 0));
+    radial-gradient(ellipse 46% 150% at 50% 116%, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(100deg, rgba(114, 0, 15, 0.94), rgba(83, 32, 143, 0.92));
+}
+
+.dark-mode .site-header::after {
+  background: linear-gradient(to bottom, rgba(88, 28, 135, 0.26), rgba(88, 28, 135, 0));
 }
 
 .brand {
