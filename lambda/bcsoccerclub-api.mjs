@@ -3,6 +3,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-
 
 const TABLE_NAME = process.env.TABLE_NAME
 const STATE_KEY = 'state'
+const PAST_GAME_LIMIT = 2
 
 const dynamodb = new DynamoDBClient({})
 
@@ -19,6 +20,7 @@ const emptyState = {
     nextMatchAt: '',
     updatedAt: '',
     updatedBy: '',
+    pastGames: [],
     captains: {
       penny: '',
       withoutPenny: '',
@@ -46,6 +48,14 @@ const sanitizePlayer = (player, fallbackId = randomUUID()) => ({
   updatedBy: String(player?.updatedBy || ''),
 })
 
+const sanitizePastGamePlayer = (player, fallbackId) => ({
+  id: String(player?.id || fallbackId),
+  firstName: String(player?.firstName || '').trim(),
+  lastName: String(player?.lastName || '').trim(),
+  skill: String(player?.skill || 'beginner'),
+  team: sanitizeTeam(player?.team),
+})
+
 function normalizePlayers(players) {
   if (!players) {
     return []
@@ -63,11 +73,49 @@ function normalizePlayers(players) {
     .sort((a, b) => (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id))
 }
 
+function normalizePastGamePlayers(players) {
+  if (!Array.isArray(players)) {
+    return []
+  }
+
+  return players
+    .map((player, index) => sanitizePastGamePlayer(player, player?.id || `past-player-${index}`))
+    .filter((player) => player.firstName && player.lastName)
+}
+
+function normalizePastGame(game, index) {
+  const playedAt = String(game?.playedAt || '')
+  const teams = game?.teams && typeof game.teams === 'object' ? game.teams : {}
+
+  return {
+    id: String(game?.id || playedAt || `past-game-${index}`),
+    playedAt,
+    archivedAt: String(game?.archivedAt || ''),
+    captains: normalizeCaptains(game?.captains),
+    teams: {
+      penny: normalizePastGamePlayers(teams.penny),
+      withoutPenny: normalizePastGamePlayers(teams.withoutPenny),
+    },
+  }
+}
+
+function normalizePastGames(pastGames) {
+  if (!Array.isArray(pastGames)) {
+    return []
+  }
+
+  return pastGames
+    .map((game, index) => normalizePastGame(game, index))
+    .filter((game) => game.playedAt)
+    .slice(0, PAST_GAME_LIMIT)
+}
+
 function normalizeMatch(match) {
   return {
     ...emptyState.match,
     ...(match && typeof match === 'object' ? match : {}),
     captains: normalizeCaptains(match?.captains),
+    pastGames: normalizePastGames(match?.pastGames),
   }
 }
 

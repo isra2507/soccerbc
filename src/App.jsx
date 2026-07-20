@@ -44,6 +44,8 @@ const TEAM_LABELS = {
 }
 
 const TEAM_KEYS = ['penny', 'withoutPenny']
+const GAME_HOLD_MS = 3 * 60 * 60 * 1000
+const PAST_GAME_LIMIT = 2
 
 const DATA_STATUS_LABELS = {
   cloud: 'Live online board',
@@ -141,10 +143,116 @@ const getSkillLabel = (value) =>
 
 const getPlayerName = (player) => `${player.firstName} ${player.lastName}`
 
+const groupPlayersByTeam = (players = []) => ({
+  penny: players.filter((player) => player.team === 'penny'),
+  withoutPenny: players.filter((player) => player.team === 'withoutPenny'),
+})
+
 const normalizeCaptains = (captains) => ({
   penny: String(captains?.penny || ''),
   withoutPenny: String(captains?.withoutPenny || ''),
 })
+
+const getMatchStartTime = (value) => {
+  if (!value) {
+    return null
+  }
+
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+const getMatchResetTime = (value) => {
+  const startTime = getMatchStartTime(value)
+  return startTime === null ? null : startTime + GAME_HOLD_MS
+}
+
+const sanitizePastGamePlayer = (player, fallbackId) => ({
+  id: String(player?.id || fallbackId),
+  firstName: String(player?.firstName || '').trim(),
+  lastName: String(player?.lastName || '').trim(),
+  skill: String(player?.skill || 'beginner'),
+  team: player?.team === 'withoutPenny' ? 'withoutPenny' : 'penny',
+})
+
+const normalizePastGamePlayers = (players) => {
+  if (!Array.isArray(players)) {
+    return []
+  }
+
+  return players
+    .map((player, index) =>
+      sanitizePastGamePlayer(player, player?.id || `past-player-${index}`),
+    )
+    .filter((player) => player.firstName && player.lastName)
+}
+
+const normalizePastGame = (game, index) => {
+  const playedAt = String(game?.playedAt || '')
+  const fallbackTeams = groupPlayersByTeam(
+    Array.isArray(game?.players) ? game.players : [],
+  )
+  const teams = game?.teams && typeof game.teams === 'object' ? game.teams : fallbackTeams
+
+  return {
+    id: String(game?.id || playedAt || `past-game-${index}`),
+    playedAt,
+    archivedAt: String(game?.archivedAt || ''),
+    captains: normalizeCaptains(game?.captains),
+    teams: {
+      penny: normalizePastGamePlayers(teams.penny),
+      withoutPenny: normalizePastGamePlayers(teams.withoutPenny),
+    },
+  }
+}
+
+const normalizePastGames = (pastGames) => {
+  if (!Array.isArray(pastGames)) {
+    return []
+  }
+
+  return pastGames
+    .map((game, index) => normalizePastGame(game, index))
+    .filter((game) => game.playedAt)
+    .slice(0, PAST_GAME_LIMIT)
+}
+
+const createPastGameSnapshot = (match, players) => {
+  if (!match?.nextMatchAt || players.length === 0) {
+    return null
+  }
+
+  const teams = groupPlayersByTeam(players)
+  const snapshotPlayers = (teamPlayers) =>
+    teamPlayers.map((player, index) =>
+      sanitizePastGamePlayer(player, player.id || `past-player-${index}`),
+    )
+
+  return {
+    id: `game-${getMatchStartTime(match.nextMatchAt)}`,
+    playedAt: match.nextMatchAt,
+    archivedAt: new Date().toISOString(),
+    captains: normalizeCaptains(match.captains),
+    teams: {
+      penny: snapshotPlayers(teams.penny),
+      withoutPenny: snapshotPlayers(teams.withoutPenny),
+    },
+  }
+}
+
+const buildPastGames = (match, players) => {
+  const currentPastGames = normalizePastGames(match?.pastGames)
+  const snapshot = createPastGameSnapshot(match, players)
+
+  if (!snapshot) {
+    return currentPastGames
+  }
+
+  return [
+    snapshot,
+    ...currentPastGames.filter((game) => game.playedAt !== snapshot.playedAt),
+  ].slice(0, PAST_GAME_LIMIT)
+}
 
 const randomCaptainId = (players, teamKey) => {
   const teamPlayers = players.filter((player) => player.team === teamKey)
@@ -210,8 +318,12 @@ function useCountdown(targetDate) {
   }
 
   const difference = target - now
+  if (difference <= -GAME_HOLD_MS) {
+    return 'Refreshing the board'
+  }
+
   if (difference <= 0) {
-    return 'Soccer is starting now'
+    return 'Soccer has started!'
   }
 
   const totalSeconds = Math.floor(difference / 1000)
@@ -266,6 +378,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenuTimer = useRef(null)
   const captainSyncing = useRef(false)
+  const gameLifecycleSyncing = useRef(false)
   const [darkMode, setDarkMode] = useState(
     () => window.localStorage.getItem(DARK_MODE_KEY) === 'true',
   )
@@ -316,7 +429,14 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!rosterState.match || captainSyncing.current) {
+    const resetTime = getMatchResetTime(rosterState.match?.nextMatchAt)
+
+    if (
+      !rosterState.match ||
+      captainSyncing.current ||
+      gameLifecycleSyncing.current ||
+      (resetTime && resetTime <= Date.now())
+    ) {
       return
     }
 
@@ -339,13 +459,45 @@ function App() {
       })
   }, [rosterState.match, rosterState.players])
 
+  useEffect(() => {
+    const resetTime = getMatchResetTime(rosterState.match?.nextMatchAt)
+
+    if (!resetTime || gameLifecycleSyncing.current) {
+      return
+    }
+
+    const millisecondsUntilReset = resetTime - Date.now()
+
+    if (millisecondsUntilReset > 0) {
+      const timer = window.setTimeout(() => {
+        refreshState().catch((error) => setDataError(error.message))
+      }, Math.min(millisecondsUntilReset + 1000, 2147483647))
+
+      return () => window.clearTimeout(timer)
+    }
+
+    gameLifecycleSyncing.current = true
+
+    const pastGames = buildPastGames(rosterState.match, rosterState.players)
+
+    updateMatch({
+      ...rosterState.match,
+      nextMatchAt: '',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'Automatic game reset',
+      captains: normalizeCaptains(),
+      pastGames,
+    })
+      .then(() => replacePlayers([]))
+      .then(refreshState)
+      .catch((error) => setDataError(error.message))
+      .finally(() => {
+        gameLifecycleSyncing.current = false
+      })
+  }, [rosterState.match, rosterState.players])
+
   const teams = useMemo(
-    () => ({
-      penny: rosterState.players.filter((player) => player.team === 'penny'),
-      withoutPenny: rosterState.players.filter(
-        (player) => player.team === 'withoutPenny',
-      ),
-    }),
+    () => groupPlayersByTeam(rosterState.players),
     [rosterState.players],
   )
 
@@ -720,10 +872,11 @@ function RegistrationForm({ refreshState }) {
 
 function MatchCountdown({ match }) {
   const countdown = useCountdown(match?.nextMatchAt)
+  const matchStarted = countdown === 'Soccer has started!'
 
   return (
     <div className="match-strip" aria-live="polite">
-      <span>Next soccer date</span>
+      <span>{matchStarted ? 'Current soccer date' : 'Next soccer date'}</span>
       <strong>{formatMatchDate(match?.nextMatchAt)}</strong>
       <em>{countdown}</em>
     </div>
@@ -928,6 +1081,7 @@ function StaffPage({ rosterState, refreshState, onBack }) {
   if (!authenticated) {
     return (
       <StaffLogin
+        pastGames={rosterState.match?.pastGames}
         onBack={onBack}
         onAuthenticated={() => {
           sessionStorage.setItem('bcStaffAuthed', STAFF_PASSWORD)
@@ -951,9 +1105,11 @@ function StaffPage({ rosterState, refreshState, onBack }) {
   )
 }
 
-function StaffLogin({ onBack, onAuthenticated }) {
+function StaffLogin({ pastGames, onBack, onAuthenticated }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [showPastGames, setShowPastGames] = useState(false)
+  const savedPastGames = normalizePastGames(pastGames)
 
   const handleSubmit = (event) => {
     event.preventDefault()
@@ -989,8 +1145,74 @@ function StaffLogin({ onBack, onAuthenticated }) {
           </button>
           {error ? <p className="form-notice error">{error}</p> : null}
         </form>
+        <button
+          className="submit-button past-games-button"
+          type="button"
+          aria-expanded={showPastGames}
+          onClick={() => setShowPastGames((open) => !open)}
+        >
+          View past game
+        </button>
+        {showPastGames ? <PastGamesPanel games={savedPastGames} /> : null}
       </section>
     </main>
+  )
+}
+
+function PastGamesPanel({ games }) {
+  return (
+    <section className="past-games-panel" aria-label="Past games">
+      {games.length === 0 ? (
+        <p className="form-notice">No past games saved yet.</p>
+      ) : (
+        games.map((game) => <PastGameCard game={game} key={game.id} />)
+      )}
+    </section>
+  )
+}
+
+function PastGameCard({ game }) {
+  return (
+    <article className="past-game-card">
+      <div>
+        <p className="section-kicker">Past game</p>
+        <h2>{formatMatchDate(game.playedAt)}</h2>
+      </div>
+      <div className="past-game-teams">
+        <PastGameTeam game={game} teamKey="penny" />
+        <PastGameTeam game={game} teamKey="withoutPenny" />
+      </div>
+    </article>
+  )
+}
+
+function PastGameTeam({ game, teamKey }) {
+  const players = game.teams[teamKey] || []
+  const captainId = normalizeCaptains(game.captains)[teamKey]
+  const captain = players.find((player) => player.id === captainId)
+
+  return (
+    <section className="past-game-team">
+      <div className="past-game-team-title">
+        <h3>{TEAM_LABELS[teamKey]}</h3>
+        <span>{players.length} players</span>
+      </div>
+      <p>
+        Captain: <strong>{captain ? getPlayerName(captain) : 'Not saved'}</strong>
+      </p>
+      {players.length === 0 ? (
+        <p className="empty-cell">No players saved</p>
+      ) : (
+        <ol>
+          {players.map((player) => (
+            <li key={player.id}>
+              <span>{getPlayerName(player)}</span>
+              <em>{getSkillLabel(player.skill)}</em>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   )
 }
 

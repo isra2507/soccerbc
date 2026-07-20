@@ -1004,6 +1004,108 @@ tr:last-child td {
   gap: 14px;
 }
 
+.past-games-button {
+  margin-top: 4px;
+  border-color: rgba(14, 116, 144, 0.2);
+  color: #075985;
+  background: rgba(224, 242, 254, 0.84);
+}
+
+.past-games-panel {
+  display: grid;
+  gap: 18px;
+  padding-top: 4px;
+}
+
+.past-game-card {
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(14, 116, 144, 0.14);
+}
+
+.past-game-card h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.35rem;
+}
+
+.past-game-teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.past-game-team {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(14, 116, 144, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.past-game-team-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.past-game-team h3,
+.past-game-team p,
+.past-game-team ol {
+  margin: 0;
+}
+
+.past-game-team h3 {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.past-game-team-title span {
+  flex: 0 0 auto;
+  color: #0369a1;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.past-game-team p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.past-game-team strong {
+  color: #075985;
+}
+
+.past-game-team ol {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.past-game-team li {
+  padding-left: 2px;
+  color: #0b2436;
+  font-weight: 800;
+}
+
+.past-game-team li span,
+.past-game-team li em {
+  display: block;
+}
+
+.past-game-team li em {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .staff-toolbar,
 .admin-header {
   display: flex;
@@ -1267,6 +1369,37 @@ tr:last-child td {
   color: #7dd3fc;
 }
 
+.dark-mode .past-games-button {
+  border-color: rgba(125, 211, 252, 0.34);
+  color: #e0f2fe;
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.dark-mode .past-game-card {
+  border-top-color: rgba(125, 211, 252, 0.2);
+}
+
+.dark-mode .past-game-card h2,
+.dark-mode .past-game-team h3,
+.dark-mode .past-game-team li {
+  color: #e0f2fe;
+}
+
+.dark-mode .past-game-team {
+  border-color: rgba(125, 211, 252, 0.2);
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.dark-mode .past-game-team-title span,
+.dark-mode .past-game-team strong {
+  color: #7dd3fc;
+}
+
+.dark-mode .past-game-team p,
+.dark-mode .past-game-team li em {
+  color: #b7dceb;
+}
+
 .dark-mode .about-home-link {
   border-color: rgba(125, 211, 252, 0.42);
   color: #e0f2fe;
@@ -1420,6 +1553,10 @@ tr:last-child td {
     width: calc(100vw - 20px);
     max-width: calc(100vw - 20px);
     margin-inline: 0;
+  }
+
+  .past-game-teams {
+    grid-template-columns: 1fr;
   }
 
   .member-dashboard-page .admin-header {
