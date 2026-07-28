@@ -45,7 +45,8 @@ const TEAM_LABELS = {
 
 const TEAM_KEYS = ['penny', 'withoutPenny']
 const GAME_HOLD_MS = 3 * 60 * 60 * 1000
-const PAST_GAME_LIMIT = 2
+const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
+const PREVIOUS_TABLE_LIMIT = 1
 
 const DATA_STATUS_LABELS = {
   cloud: 'Live online board',
@@ -167,6 +168,14 @@ const getMatchResetTime = (value) => {
   return startTime === null ? null : startTime + GAME_HOLD_MS
 }
 
+const isPreviousTableFresh = (game, now = Date.now()) => {
+  const archivedTime = getMatchStartTime(game?.archivedAt)
+  const playedTime = getMatchStartTime(game?.playedAt)
+  const savedTime = archivedTime ?? playedTime
+
+  return savedTime !== null && now - savedTime <= PREVIOUS_TABLE_HOLD_MS
+}
+
 const sanitizePastGamePlayer = (player, fallbackId) => ({
   id: String(player?.id || fallbackId),
   firstName: String(player?.firstName || '').trim(),
@@ -213,8 +222,8 @@ const normalizePastGames = (pastGames) => {
 
   return pastGames
     .map((game, index) => normalizePastGame(game, index))
-    .filter((game) => game.playedAt)
-    .slice(0, PAST_GAME_LIMIT)
+    .filter((game) => game.playedAt && isPreviousTableFresh(game))
+    .slice(0, PREVIOUS_TABLE_LIMIT)
 }
 
 const createPastGameSnapshot = (match, players) => {
@@ -251,7 +260,7 @@ const buildPastGames = (match, players) => {
   return [
     snapshot,
     ...currentPastGames.filter((game) => game.playedAt !== snapshot.playedAt),
-  ].slice(0, PAST_GAME_LIMIT)
+  ].slice(0, PREVIOUS_TABLE_LIMIT)
 }
 
 const randomCaptainId = (players, teamKey) => {
@@ -323,7 +332,7 @@ function useCountdown(targetDate) {
   }
 
   if (difference <= 0) {
-    return 'Soccer has started!'
+    return 'Game currently ongoing'
   }
 
   const totalSeconds = Math.floor(difference / 1000)
@@ -756,6 +765,8 @@ function SoccerBallRain() {
 }
 
 function PublicPage({ dataError, match, refreshState, teams }) {
+  const registrationOpen = getMatchStartTime(match?.nextMatchAt) !== null
+
   return (
     <main>
       <section className="hero-panel">
@@ -771,7 +782,10 @@ function PublicPage({ dataError, match, refreshState, teams }) {
       </section>
 
       <section className="main-grid" aria-label="Soccer signup and teams">
-        <RegistrationForm refreshState={refreshState} />
+        <RegistrationForm
+          refreshState={refreshState}
+          registrationOpen={registrationOpen}
+        />
         <TeamTables captains={match?.captains} teams={teams} />
       </section>
 
@@ -780,15 +794,22 @@ function PublicPage({ dataError, match, refreshState, teams }) {
   )
 }
 
-function RegistrationForm({ refreshState }) {
+function RegistrationForm({ refreshState, registrationOpen }) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [skill, setSkill] = useState('')
   const [notice, setNotice] = useState('')
   const [saving, setSaving] = useState(false)
+  const formDisabled = saving || !registrationOpen
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+
+    if (!registrationOpen) {
+      setNotice('Registration opens after staff sets the next soccer date.')
+      return
+    }
+
     const cleanFirstName = normalizeName(firstName)
     const cleanLastName = normalizeName(lastName)
 
@@ -829,10 +850,17 @@ function RegistrationForm({ refreshState }) {
         <h2>Player registration</h2>
       </div>
 
+      {!registrationOpen ? (
+        <p className="form-notice">
+          Registration opens after staff sets the next soccer date.
+        </p>
+      ) : null}
+
       <label>
         <span>First name</span>
         <input
           autoComplete="given-name"
+          disabled={formDisabled}
           value={firstName}
           onChange={(event) => setFirstName(event.target.value)}
           placeholder="First name"
@@ -843,6 +871,7 @@ function RegistrationForm({ refreshState }) {
         <span>Last name</span>
         <input
           autoComplete="family-name"
+          disabled={formDisabled}
           value={lastName}
           onChange={(event) => setLastName(event.target.value)}
           placeholder="Last name"
@@ -851,7 +880,11 @@ function RegistrationForm({ refreshState }) {
 
       <label>
         <span>Skill level</span>
-        <select value={skill} onChange={(event) => setSkill(event.target.value)}>
+        <select
+          disabled={formDisabled}
+          value={skill}
+          onChange={(event) => setSkill(event.target.value)}
+        >
           <option value="">Choose your skill level</option>
           {SKILL_LEVELS.map((level) => (
             <option key={level.value} value={level.value}>
@@ -861,8 +894,8 @@ function RegistrationForm({ refreshState }) {
         </select>
       </label>
 
-      <button className="submit-button" type="submit" disabled={saving}>
-        {saving ? 'Adding player...' : 'Submit'}
+      <button className="submit-button" type="submit" disabled={formDisabled}>
+        {saving ? 'Adding player...' : registrationOpen ? 'Submit' : 'Date needed first'}
       </button>
 
       {notice ? <p className="form-notice">{notice}</p> : null}
@@ -872,13 +905,19 @@ function RegistrationForm({ refreshState }) {
 
 function MatchCountdown({ match }) {
   const countdown = useCountdown(match?.nextMatchAt)
-  const matchStarted = countdown === 'Soccer has started!'
+  const matchOngoing = countdown === 'Game currently ongoing'
 
   return (
     <div className="match-strip" aria-live="polite">
-      <span>{matchStarted ? 'Current soccer date' : 'Next soccer date'}</span>
+      <span>{matchOngoing ? 'Game announcement' : 'Next soccer date'}</span>
       <strong>{formatMatchDate(match?.nextMatchAt)}</strong>
       <em>{countdown}</em>
+      {matchOngoing ? (
+        <p className="match-announcement">
+          The game is currently ongoing, and this table will stay displayed for
+          3 hours.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -1151,7 +1190,7 @@ function StaffLogin({ pastGames, onBack, onAuthenticated }) {
           aria-expanded={showPastGames}
           onClick={() => setShowPastGames((open) => !open)}
         >
-          View past game
+          Previous table
         </button>
         {showPastGames ? <PastGamesPanel games={savedPastGames} /> : null}
       </section>
@@ -1161,9 +1200,9 @@ function StaffLogin({ pastGames, onBack, onAuthenticated }) {
 
 function PastGamesPanel({ games }) {
   return (
-    <section className="past-games-panel" aria-label="Past games">
+    <section className="past-games-panel" aria-label="Previous table">
       {games.length === 0 ? (
-        <p className="form-notice">No past games saved yet.</p>
+        <p className="form-notice">No previous table saved yet.</p>
       ) : (
         games.map((game) => <PastGameCard game={game} key={game.id} />)
       )}
@@ -1175,7 +1214,7 @@ function PastGameCard({ game }) {
   return (
     <article className="past-game-card">
       <div>
-        <p className="section-kicker">Past game</p>
+        <p className="section-kicker">Previous table</p>
         <h2>{formatMatchDate(game.playedAt)}</h2>
       </div>
       <div className="past-game-teams">
@@ -1277,6 +1316,7 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
   const [saving, setSaving] = useState('')
   const [draftPlayers, setDraftPlayers] = useState(rosterState.players)
   const [rosterDirty, setRosterDirty] = useState(false)
+  const [showPreviousTable, setShowPreviousTable] = useState(false)
   const [matchDate, setMatchDate] = useState(() =>
     toDateTimeLocal(rosterState.match?.nextMatchAt),
   )
@@ -1300,6 +1340,7 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
     }),
     [draftPlayers],
   )
+  const previousTables = normalizePastGames(rosterState.match?.pastGames)
 
   const savePlayers = async (players, message = 'Roster updated.') => {
     setSaving('Saving changes...')
@@ -1444,7 +1485,17 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
           >
             Reset draft
           </button>
+          <button
+            className="back-button"
+            type="button"
+            aria-expanded={showPreviousTable}
+            onClick={() => setShowPreviousTable((open) => !open)}
+          >
+            Previous table
+          </button>
         </section>
+
+        {showPreviousTable ? <PastGamesPanel games={previousTables} /> : null}
 
         <TeamTables
           captains={rosterState.match?.captains}

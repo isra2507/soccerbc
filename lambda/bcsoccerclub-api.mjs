@@ -3,7 +3,8 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-
 
 const TABLE_NAME = process.env.TABLE_NAME
 const STATE_KEY = 'state'
-const PAST_GAME_LIMIT = 2
+const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
+const PREVIOUS_TABLE_LIMIT = 1
 
 const dynamodb = new DynamoDBClient({})
 
@@ -33,6 +34,21 @@ function normalizeCaptains(captains) {
     penny: String(captains?.penny || ''),
     withoutPenny: String(captains?.withoutPenny || ''),
   }
+}
+
+function getTime(value) {
+  if (!value) {
+    return null
+  }
+
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+function isPreviousTableFresh(game) {
+  const savedTime = getTime(game?.archivedAt) ?? getTime(game?.playedAt)
+
+  return savedTime !== null && Date.now() - savedTime <= PREVIOUS_TABLE_HOLD_MS
 }
 
 const sanitizeTeam = (team) => (team === 'withoutPenny' ? 'withoutPenny' : 'penny')
@@ -106,8 +122,8 @@ function normalizePastGames(pastGames) {
 
   return pastGames
     .map((game, index) => normalizePastGame(game, index))
-    .filter((game) => game.playedAt)
-    .slice(0, PAST_GAME_LIMIT)
+    .filter((game) => game.playedAt && isPreviousTableFresh(game))
+    .slice(0, PREVIOUS_TABLE_LIMIT)
 }
 
 function normalizeMatch(match) {

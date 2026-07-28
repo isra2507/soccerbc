@@ -1,5 +1,6 @@
 const LOCAL_STORAGE_KEY = 'bc-soccer-live-board'
-const PAST_GAME_LIMIT = 2
+const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
+const PREVIOUS_TABLE_LIMIT = 1
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/g, '')
 const firebaseDatabaseUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL?.trim()
@@ -39,6 +40,21 @@ function normalizeCaptains(captains) {
     penny: String(captains?.penny || ''),
     withoutPenny: String(captains?.withoutPenny || ''),
   }
+}
+
+function getTime(value) {
+  if (!value) {
+    return null
+  }
+
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+function isPreviousTableFresh(game) {
+  const savedTime = getTime(game?.archivedAt) ?? getTime(game?.playedAt)
+
+  return savedTime !== null && Date.now() - savedTime <= PREVIOUS_TABLE_HOLD_MS
 }
 
 const sanitizeTeam = (team) => (team === 'withoutPenny' ? 'withoutPenny' : 'penny')
@@ -112,8 +128,8 @@ function normalizePastGames(pastGames) {
 
   return pastGames
     .map((game, index) => normalizePastGame(game, index))
-    .filter((game) => game.playedAt)
-    .slice(0, PAST_GAME_LIMIT)
+    .filter((game) => game.playedAt && isPreviousTableFresh(game))
+    .slice(0, PREVIOUS_TABLE_LIMIT)
 }
 
 function normalizeState(rawState) {

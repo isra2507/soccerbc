@@ -667,6 +667,14 @@ h2 {
   line-height: 1;
 }
 
+.match-announcement {
+  margin: 12px 0 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .main-grid {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
@@ -829,7 +837,13 @@ button:focus-visible {
 
 .submit-button:disabled {
   opacity: 0.7;
-  cursor: progress;
+  cursor: not-allowed;
+}
+
+input:disabled,
+select:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
 }
 
 .form-notice,
