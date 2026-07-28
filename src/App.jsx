@@ -53,6 +53,7 @@ const TEAM_LABELS = {
 }
 
 const TEAM_KEYS = ['penny', 'withoutPenny']
+const CAPTAIN_SKILL_PRIORITY = ['semi-pro', 'professional', 'intermediate', 'beginner']
 const GAME_HOLD_MS = 3 * 60 * 60 * 1000
 const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
 const PREVIOUS_TABLE_LIMIT = 1
@@ -253,6 +254,11 @@ const balanceTeamAssignments = (players = []) => {
 const getTeamSkillScore = (players = []) =>
   players.reduce((total, player) => total + getSkillValue(player.skill), 0)
 
+const getCaptainPriority = (skill) => {
+  const priority = CAPTAIN_SKILL_PRIORITY.indexOf(skill)
+  return priority === -1 ? CAPTAIN_SKILL_PRIORITY.length : priority
+}
+
 const groupPlayersByTeam = (players = []) => ({
   penny: players.filter((player) => player.team === 'penny'),
   withoutPenny: players.filter((player) => player.team === 'withoutPenny'),
@@ -372,13 +378,34 @@ const buildPastGames = (match, players) => {
   ].slice(0, PREVIOUS_TABLE_LIMIT)
 }
 
-const randomCaptainId = (players, teamKey) => {
+const preferredCaptainId = (players, teamKey, currentCaptainId = '') => {
   const teamPlayers = players.filter((player) => player.team === teamKey)
   if (teamPlayers.length === 0) {
     return ''
   }
 
-  return teamPlayers[Math.floor(Math.random() * teamPlayers.length)].id
+  const preferredPlayers = [...teamPlayers].sort((a, b) => {
+    const priorityDifference =
+      getCaptainPriority(a.skill) - getCaptainPriority(b.skill)
+
+    if (priorityDifference !== 0) {
+      return priorityDifference
+    }
+
+    return (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id)
+  })
+  const preferredPlayer = preferredPlayers[0]
+  const currentCaptain = teamPlayers.find((player) => player.id === currentCaptainId)
+
+  if (
+    currentCaptain &&
+    getCaptainPriority(currentCaptain.skill) ===
+      getCaptainPriority(preferredPlayer.skill)
+  ) {
+    return currentCaptain.id
+  }
+
+  return preferredPlayer.id
 }
 
 const resolveCaptains = (players, captains) => {
@@ -390,8 +417,8 @@ const resolveCaptains = (players, captains) => {
     )
 
     nextCaptains[teamKey] = hasCurrentCaptain
-      ? currentCaptains[teamKey]
-      : randomCaptainId(players, teamKey)
+      ? preferredCaptainId(players, teamKey, currentCaptains[teamKey])
+      : preferredCaptainId(players, teamKey)
 
     return nextCaptains
   }, {})
@@ -1024,6 +1051,8 @@ function BalanceGuide() {
           Beginner counts as 1 point, Intermediate as 2, Semi-pro as 3, and
           Professional as 4. The table can be completely rearranged whenever a
           new player joins or staff sees a better way to keep both teams close.
+          Captains are picked by skill priority: Semi-pro, then Professional,
+          then Intermediate, then Beginner.
         </p>
       </div>
 
@@ -1571,18 +1600,34 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
     event.preventDefault()
 
     const nextMatchAt = matchDate ? new Date(matchDate).toISOString() : ''
+    const currentMatchAt = rosterState.match?.nextMatchAt || ''
+    const dateChanged = nextMatchAt !== currentMatchAt
+    const pastGames = dateChanged
+      ? buildPastGames(rosterState.match, rosterState.players)
+      : normalizePastGames(rosterState.match?.pastGames)
     setSaving('Saving soccer date...')
 
     try {
       await updateMatch({
         ...rosterState.match,
         nextMatchAt,
-        captains: normalizeCaptains(rosterState.match?.captains),
+        captains: dateChanged
+          ? normalizeCaptains()
+          : resolveCaptains(rosterState.players, rosterState.match?.captains),
+        pastGames,
         updatedAt: new Date().toISOString(),
         updatedBy: `${staffName.firstName} ${staffName.lastName}`,
       })
+      if (dateChanged) {
+        await replacePlayers([])
+      }
       await refreshState()
-      setSaving('Soccer date updated.')
+      setRosterDirty(false)
+      setSaving(
+        dateChanged
+          ? 'Soccer date updated. Registration table refreshed.'
+          : 'Soccer date updated.',
+      )
     } catch (error) {
       setSaving(error.message)
     }
