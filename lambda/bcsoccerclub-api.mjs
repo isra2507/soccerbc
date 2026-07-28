@@ -5,6 +5,13 @@ const TABLE_NAME = process.env.TABLE_NAME
 const STATE_KEY = 'state'
 const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
 const PREVIOUS_TABLE_LIMIT = 1
+const TEAM_KEYS = ['penny', 'withoutPenny']
+const SKILL_POINTS = {
+  beginner: 1,
+  intermediate: 2,
+  'semi-pro': 3,
+  professional: 4,
+}
 
 const dynamodb = new DynamoDBClient({})
 
@@ -52,6 +59,7 @@ function isPreviousTableFresh(game) {
 }
 
 const sanitizeTeam = (team) => (team === 'withoutPenny' ? 'withoutPenny' : 'penny')
+const getSkillValue = (skill) => SKILL_POINTS[skill] ?? SKILL_POINTS.beginner
 
 const sanitizePlayer = (player, fallbackId = randomUUID()) => ({
   id: String(player?.id || fallbackId),
@@ -87,6 +95,56 @@ function normalizePlayers(players) {
     .map(([id, player]) => sanitizePlayer(player, id))
     .filter((player) => player.firstName && player.lastName)
     .sort((a, b) => (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id))
+}
+
+function balanceTeamAssignments(players) {
+  const normalizedPlayers = normalizePlayers(players)
+  const teamState = TEAM_KEYS.reduce((state, teamKey) => {
+    state[teamKey] = { count: 0, score: 0 }
+    return state
+  }, {})
+  const maxTeamSize = Math.ceil(normalizedPlayers.length / TEAM_KEYS.length)
+  const assignments = new Map()
+  const sortedPlayers = [...normalizedPlayers].sort((a, b) => {
+    const skillDifference = getSkillValue(b.skill) - getSkillValue(a.skill)
+
+    if (skillDifference !== 0) {
+      return skillDifference
+    }
+
+    return (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id)
+  })
+
+  sortedPlayers.forEach((player) => {
+    const availableTeams = TEAM_KEYS.filter(
+      (teamKey) => teamState[teamKey].count < maxTeamSize,
+    )
+    const targetTeam = availableTeams.sort((a, b) => {
+      const scoreDifference = teamState[a].score - teamState[b].score
+
+      if (scoreDifference !== 0) {
+        return scoreDifference
+      }
+
+      return teamState[a].count - teamState[b].count
+    })[0]
+
+    teamState[targetTeam].count += 1
+    teamState[targetTeam].score += getSkillValue(player.skill)
+    assignments.set(player.id, targetTeam)
+  })
+
+  return normalizedPlayers.map((player) => ({
+    ...player,
+    team: assignments.get(player.id) || player.team,
+  }))
+}
+
+function addAndBalancePlayer(players, player) {
+  return balanceTeamAssignments([
+    ...normalizePlayers(players).filter((item) => item.id !== player.id),
+    player,
+  ])
 }
 
 function normalizePastGamePlayers(players) {
@@ -219,7 +277,7 @@ async function addPlayer(event) {
   }
 
   const state = await readState()
-  const players = [...state.players.filter((item) => item.id !== player.id), player]
+  const players = addAndBalancePlayer(state.players, player)
   const nextState = await writeState({ ...state, players })
 
   return jsonResponse(200, nextState)

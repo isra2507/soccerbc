@@ -683,6 +683,119 @@ h2 {
   margin-top: 18px;
 }
 
+.balance-guide {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.balance-guide-header {
+  max-width: 920px;
+}
+
+.balance-guide-header h2 {
+  max-width: 780px;
+  font-size: 2rem;
+}
+
+.balance-guide-header p:last-child {
+  max-width: 860px;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.skill-score-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.skill-score-item,
+.balance-examples li {
+  border: 1px solid rgba(14, 116, 144, 0.14);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 18px 50px rgba(8, 47, 73, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.skill-score-item {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+.skill-score-item span {
+  color: #075985;
+  font-weight: 900;
+}
+
+.skill-score-item strong {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  color: #ffffff;
+  background: var(--field);
+  font-size: 1.1rem;
+}
+
+.balance-examples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: balance-examples;
+}
+
+.balance-examples li {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 136px;
+  padding: 18px 18px 18px 62px;
+  counter-increment: balance-examples;
+}
+
+.balance-examples li::before {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  color: #075985;
+  background: var(--field-light);
+  font-size: 0.86rem;
+  font-weight: 900;
+  content: counter(balance-examples);
+}
+
+.balance-examples strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.balance-examples p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .about-page {
   display: grid;
   gap: 18px;
@@ -1414,6 +1527,26 @@ tr:last-child td {
   color: #b7dceb;
 }
 
+.dark-mode .skill-score-item,
+.dark-mode .balance-examples li {
+  border-color: rgba(125, 211, 252, 0.18);
+  background: rgba(5, 18, 31, 0.62);
+}
+
+.dark-mode .balance-guide-header p:last-child,
+.dark-mode .balance-examples p {
+  color: #b7dceb;
+}
+
+.dark-mode .skill-score-item span,
+.dark-mode .balance-examples li::before {
+  color: #7dd3fc;
+}
+
+.dark-mode .balance-examples strong {
+  color: #e0f2fe;
+}
+
 .dark-mode .about-home-link {
   border-color: rgba(125, 211, 252, 0.42);
   color: #e0f2fe;
@@ -1439,7 +1572,9 @@ tr:last-child td {
 
   .hero-panel,
   .main-grid,
-  .teams-panel {
+  .teams-panel,
+  .skill-score-strip,
+  .balance-examples {
     grid-template-columns: 1fr;
   }
 
@@ -1544,6 +1679,10 @@ tr:last-child td {
 
   .hero-text {
     font-size: 1rem;
+  }
+
+  .balance-guide-header h2 {
+    font-size: 1.45rem;
   }
 
   .match-strip {

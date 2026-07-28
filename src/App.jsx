@@ -23,20 +23,29 @@ const SKILL_LEVELS = [
   {
     value: 'beginner',
     label: 'Beginner (first time touching grass)',
+    points: 1,
   },
   {
     value: 'intermediate',
     label: 'Intermediate (I somewhat know how to control and pass)',
+    points: 2,
   },
   {
     value: 'semi-pro',
     label: 'Semi-pro (I know ball)',
+    points: 3,
   },
   {
     value: 'professional',
     label: "Professional (Ball knows me)",
+    points: 4,
   },
 ]
+
+const SKILL_POINTS = SKILL_LEVELS.reduce((scores, level) => {
+  scores[level.value] = level.points
+  return scores
+}, {})
 
 const TEAM_LABELS = {
   penny: 'Team 1 (penny)',
@@ -47,6 +56,59 @@ const TEAM_KEYS = ['penny', 'withoutPenny']
 const GAME_HOLD_MS = 3 * 60 * 60 * 1000
 const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
 const PREVIOUS_TABLE_LIMIT = 1
+
+const BALANCE_EXAMPLES = [
+  {
+    title: 'One of each level',
+    detail:
+      'If both teams have one Professional, one Semi-pro, one Intermediate, and one Beginner, both teams total 10 points.',
+  },
+  {
+    title: 'Two strong players on one side',
+    detail:
+      'If Team 1 has two Professionals and Team 2 has mostly Beginners, move one Professional across before the match starts.',
+  },
+  {
+    title: 'All Professionals together',
+    detail:
+      'Four Professionals against four Beginners is unbalanced, so Professionals should be split across both teams.',
+  },
+  {
+    title: 'Semi-pro overload',
+    detail:
+      'If one team has three Semi-pro players, swap one Semi-pro with an Intermediate from the other team.',
+  },
+  {
+    title: 'Registration order',
+    detail:
+      'If the first four signups are all strong players, the table should still be rearranged instead of locking them together.',
+  },
+  {
+    title: 'Sixteen-player table',
+    detail:
+      'With four players at every level, each team should receive a similar mix instead of one team getting all the top levels.',
+  },
+  {
+    title: 'Wrong skill selected',
+    detail:
+      'If someone signs up as Intermediate but clearly plays like a Professional, staff can update the level and rebalance.',
+  },
+  {
+    title: 'Small score gap',
+    detail:
+      'If one team totals 11 points and the other totals 9, swapping a Professional with a Semi-pro can make it 10 and 10.',
+  },
+  {
+    title: 'Late Professional signup',
+    detail:
+      'A late Professional should not simply be added to the smaller team; the full table can be recalculated.',
+  },
+  {
+    title: 'Uneven player count',
+    detail:
+      'With an odd number of players, one team may have one extra player, but the skill score should still stay close.',
+  },
+]
 
 const DATA_STATUS_LABELS = {
   cloud: 'Live online board',
@@ -137,12 +199,59 @@ const createId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-const randomTeam = () => (Math.random() < 0.5 ? 'penny' : 'withoutPenny')
+const getSkillValue = (value) => SKILL_POINTS[value] ?? SKILL_POINTS.beginner
 
 const getSkillLabel = (value) =>
   SKILL_LEVELS.find((level) => level.value === value)?.label ?? value
 
 const getPlayerName = (player) => `${player.firstName} ${player.lastName}`
+
+const sortPlayersForBalance = (players) =>
+  [...players].sort((a, b) => {
+    const skillDifference = getSkillValue(b.skill) - getSkillValue(a.skill)
+
+    if (skillDifference !== 0) {
+      return skillDifference
+    }
+
+    return (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id)
+  })
+
+const balanceTeamAssignments = (players = []) => {
+  const teamState = TEAM_KEYS.reduce((state, teamKey) => {
+    state[teamKey] = { count: 0, score: 0 }
+    return state
+  }, {})
+  const maxTeamSize = Math.ceil(players.length / TEAM_KEYS.length)
+  const assignments = new Map()
+
+  sortPlayersForBalance(players).forEach((player) => {
+    const availableTeams = TEAM_KEYS.filter(
+      (teamKey) => teamState[teamKey].count < maxTeamSize,
+    )
+    const targetTeam = availableTeams.sort((a, b) => {
+      const scoreDifference = teamState[a].score - teamState[b].score
+
+      if (scoreDifference !== 0) {
+        return scoreDifference
+      }
+
+      return teamState[a].count - teamState[b].count
+    })[0]
+
+    teamState[targetTeam].count += 1
+    teamState[targetTeam].score += getSkillValue(player.skill)
+    assignments.set(player.id, targetTeam)
+  })
+
+  return players.map((player) => ({
+    ...player,
+    team: assignments.get(player.id) || player.team,
+  }))
+}
+
+const getTeamSkillScore = (players = []) =>
+  players.reduce((total, player) => total + getSkillValue(player.skill), 0)
 
 const groupPlayersByTeam = (players = []) => ({
   penny: players.filter((player) => player.team === 'penny'),
@@ -774,8 +883,9 @@ function PublicPage({ dataError, match, refreshState, teams }) {
           <p className="eyebrow">Bellevue College pickup board</p>
           <h1>Soccer teams, saved live for everyone.</h1>
           <p className="hero-text">
-            Add your name and skill level. The board randomly places you on a
-            penny or without-penny team so everyone can see the teams before kickoff.
+            Add your name and skill level. The board balances the penny and
+            without-penny teams by skill score so everyone can see the teams
+            before kickoff.
           </p>
         </div>
         <MatchCountdown match={match} />
@@ -788,6 +898,8 @@ function PublicPage({ dataError, match, refreshState, teams }) {
         />
         <TeamTables captains={match?.captains} teams={teams} />
       </section>
+
+      <BalanceGuide />
 
       {dataError ? <p className="system-alert">{dataError}</p> : null}
     </main>
@@ -818,13 +930,12 @@ function RegistrationForm({ refreshState, registrationOpen }) {
       return
     }
 
-    const team = randomTeam()
     const player = {
       id: createId(),
       firstName: cleanFirstName,
       lastName: cleanLastName,
       skill,
-      team,
+      team: 'penny',
       joinedAt: new Date().toISOString(),
     }
 
@@ -835,7 +946,7 @@ function RegistrationForm({ refreshState, registrationOpen }) {
       setFirstName('')
       setLastName('')
       setSkill('')
-      setNotice(`You were added to ${TEAM_LABELS[team]}.`)
+      setNotice('You were added. The table rebalanced by skill score.')
     } catch (error) {
       setNotice(error.message)
     } finally {
@@ -903,6 +1014,40 @@ function RegistrationForm({ refreshState, registrationOpen }) {
   )
 }
 
+function BalanceGuide() {
+  return (
+    <section className="balance-guide" aria-label="Team balance guide">
+      <div className="balance-guide-header">
+        <p className="section-kicker">Balance system</p>
+        <h2>Equal numbers help, but skill distribution makes the table fair.</h2>
+        <p>
+          Beginner counts as 1 point, Intermediate as 2, Semi-pro as 3, and
+          Professional as 4. The table can be completely rearranged whenever a
+          new player joins or staff sees a better way to keep both teams close.
+        </p>
+      </div>
+
+      <div className="skill-score-strip" aria-label="Skill point values">
+        {SKILL_LEVELS.map((level) => (
+          <div className="skill-score-item" key={level.value}>
+            <span>{level.label.split(' (')[0]}</span>
+            <strong>{level.points}</strong>
+          </div>
+        ))}
+      </div>
+
+      <ol className="balance-examples">
+        {BALANCE_EXAMPLES.map((example) => (
+          <li key={example.title}>
+            <strong>{example.title}</strong>
+            <p>{example.detail}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
 function MatchCountdown({ match }) {
   const countdown = useCountdown(match?.nextMatchAt)
   const matchOngoing = countdown === 'Game currently ongoing'
@@ -967,6 +1112,7 @@ function TeamTable({
   const moveLabel = teamKey === 'penny' ? 'Send to Team 2' : 'Send to Team 1'
   const captainId = normalizeCaptains(captains)[teamKey]
   const captain = players.find((player) => player.id === captainId)
+  const skillScore = getTeamSkillScore(players)
   let captainLabel = 'No players yet'
 
   if (captain) {
@@ -1005,7 +1151,9 @@ function TeamTable({
             </p>
           )}
         </div>
-        <span>{players.length} players</span>
+        <span>
+          {players.length} players | {skillScore} skill pts
+        </span>
       </div>
       <div className="table-scroll">
         <table>
@@ -1393,6 +1541,12 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
     setSaving('Roster draft reset.')
   }
 
+  const handleRebalanceTeams = () => {
+    setDraftPlayers((players) => balanceTeamAssignments(players))
+    setRosterDirty(true)
+    setSaving('Draft rebalanced by skill score. Save roster changes to publish it.')
+  }
+
   const handleCaptainChange = async (teamKey, playerId) => {
     setSaving('Saving captain...')
 
@@ -1484,6 +1638,14 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
             onClick={handleResetRoster}
           >
             Reset draft
+          </button>
+          <button
+            className="back-button"
+            type="button"
+            disabled={draftPlayers.length < 2}
+            onClick={handleRebalanceTeams}
+          >
+            Rebalance teams
           </button>
           <button
             className="back-button"
