@@ -355,7 +355,11 @@ export async function authenticateStaff(password) {
       storeStaffToken(result.token)
       return
     } catch (error) {
-      if (!error.message.includes('No route for POST /auth')) {
+      const authRouteMissing =
+        error.message === 'Not Found' ||
+        error.message.includes('No route for POST /auth')
+
+      if (!authRouteMissing) {
         throw error
       }
     }

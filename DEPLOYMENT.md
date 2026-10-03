@@ -59,7 +59,8 @@ contain:
 - `STAFF_AUTH_SECRET` with at least 32 random bytes
 
 The API Gateway CORS configuration must allow the `Authorization` and
-`Content-Type` request headers so signed staff requests reach Lambda.
+`Content-Type` request headers so signed staff requests reach Lambda. API
+Gateway must also route `POST /auth` to the `bcsoccerclub-api` Lambda.
 
 Until the GitHub role has `lambda:UpdateFunctionCode` and
 `lambda:UpdateFunctionConfiguration`, the workflow continues with the static
