@@ -991,6 +991,14 @@ select:disabled {
   border-top-color: var(--gold);
 }
 
+.team-table:nth-child(3) {
+  border-top-color: #16a34a;
+}
+
+.team-table:nth-child(4) {
+  border-top-color: #dc2626;
+}
+
 .table-title {
   display: flex;
   align-items: center;
@@ -1302,6 +1310,68 @@ tr:last-child td {
   gap: 12px;
 }
 
+.match-settings {
+  display: grid;
+  width: min(360px, 100%);
+  gap: 14px;
+}
+
+.team-count-control {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.team-count-control legend {
+  margin-bottom: 8px;
+  color: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.team-count-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.56);
+  backdrop-filter: blur(10px);
+}
+
+.team-count-button {
+  min-height: 42px;
+  border: 0;
+  border-right: 1px solid rgba(3, 105, 161, 0.2);
+  color: #075985;
+  background: transparent;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.team-count-button:last-child {
+  border-right: 0;
+}
+
+.team-count-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.team-count-button[aria-pressed='true'] {
+  color: #ffffff;
+  background: #0284c7;
+}
+
+.team-count-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid var(--gold);
+  outline-offset: -3px;
+}
+
 .admin-notice {
   width: fit-content;
 }
@@ -1492,6 +1562,21 @@ tr:last-child td {
   background: rgba(15, 23, 42, 0.46);
 }
 
+.dark-mode .team-count-options {
+  border-color: rgba(125, 211, 252, 0.46);
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.dark-mode .team-count-button {
+  border-right-color: rgba(125, 211, 252, 0.24);
+  color: #e0f2fe;
+}
+
+.dark-mode .team-count-button[aria-pressed='true'] {
+  color: #ffffff;
+  background: #0369a1;
+}
+
 .dark-mode .captain-line strong {
   color: #7dd3fc;
 }
@@ -1605,6 +1690,10 @@ tr:last-child td {
   }
 
   .date-form {
+    width: 100%;
+  }
+
+  .match-settings {
     width: 100%;
   }
 }
@@ -1801,6 +1890,11 @@ tr:last-child td {
 
   .empty-cell::before {
     content: '';
+  }
+
+  .player-number {
+    width: 100%;
+    white-space: nowrap;
   }
 
   .name-edit {

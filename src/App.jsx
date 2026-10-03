@@ -2,13 +2,25 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   addPlayer,
+  authenticateStaff,
+  isStaffAuthenticated,
   loadState,
   replacePlayers,
   subscribeState,
   updateMatch,
 } from './dataStore'
+import {
+  TEAM_COUNT_OPTIONS,
+  balanceTeamAssignments,
+  getActiveTeamKeys,
+  getSkillValue,
+  groupPlayersByTeam,
+  normalizeCaptains,
+  normalizeTeamCount,
+  resolveCaptains,
+  sanitizeTeam,
+} from './teamLogic.js'
 
-const STAFF_PASSWORD = 'Football11!'
 const DARK_MODE_KEY = 'bcSoccerDarkMode'
 const MENU_BALLS = Array.from({ length: 16 }, (_, index) => ({
   id: index,
@@ -42,18 +54,13 @@ const SKILL_LEVELS = [
   },
 ]
 
-const SKILL_POINTS = SKILL_LEVELS.reduce((scores, level) => {
-  scores[level.value] = level.points
-  return scores
-}, {})
-
 const TEAM_LABELS = {
   penny: 'Team 1 (penny)',
   withoutPenny: 'Team 2 (without penny)',
+  team3: 'Team 3',
+  team4: 'Team 4',
 }
 
-const TEAM_KEYS = ['penny', 'withoutPenny']
-const CAPTAIN_SKILL_PRIORITY = ['semi-pro', 'professional', 'intermediate', 'beginner']
 const GAME_HOLD_MS = 3 * 60 * 60 * 1000
 const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
 const PREVIOUS_TABLE_LIMIT = 1
@@ -200,74 +207,13 @@ const createId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-const getSkillValue = (value) => SKILL_POINTS[value] ?? SKILL_POINTS.beginner
-
 const getSkillLabel = (value) =>
   SKILL_LEVELS.find((level) => level.value === value)?.label ?? value
 
 const getPlayerName = (player) => `${player.firstName} ${player.lastName}`
 
-const sortPlayersForBalance = (players) =>
-  [...players].sort((a, b) => {
-    const skillDifference = getSkillValue(b.skill) - getSkillValue(a.skill)
-
-    if (skillDifference !== 0) {
-      return skillDifference
-    }
-
-    return (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id)
-  })
-
-const balanceTeamAssignments = (players = []) => {
-  const teamState = TEAM_KEYS.reduce((state, teamKey) => {
-    state[teamKey] = { count: 0, score: 0 }
-    return state
-  }, {})
-  const maxTeamSize = Math.ceil(players.length / TEAM_KEYS.length)
-  const assignments = new Map()
-
-  sortPlayersForBalance(players).forEach((player) => {
-    const availableTeams = TEAM_KEYS.filter(
-      (teamKey) => teamState[teamKey].count < maxTeamSize,
-    )
-    const targetTeam = availableTeams.sort((a, b) => {
-      const scoreDifference = teamState[a].score - teamState[b].score
-
-      if (scoreDifference !== 0) {
-        return scoreDifference
-      }
-
-      return teamState[a].count - teamState[b].count
-    })[0]
-
-    teamState[targetTeam].count += 1
-    teamState[targetTeam].score += getSkillValue(player.skill)
-    assignments.set(player.id, targetTeam)
-  })
-
-  return players.map((player) => ({
-    ...player,
-    team: assignments.get(player.id) || player.team,
-  }))
-}
-
 const getTeamSkillScore = (players = []) =>
   players.reduce((total, player) => total + getSkillValue(player.skill), 0)
-
-const getCaptainPriority = (skill) => {
-  const priority = CAPTAIN_SKILL_PRIORITY.indexOf(skill)
-  return priority === -1 ? CAPTAIN_SKILL_PRIORITY.length : priority
-}
-
-const groupPlayersByTeam = (players = []) => ({
-  penny: players.filter((player) => player.team === 'penny'),
-  withoutPenny: players.filter((player) => player.team === 'withoutPenny'),
-})
-
-const normalizeCaptains = (captains) => ({
-  penny: String(captains?.penny || ''),
-  withoutPenny: String(captains?.withoutPenny || ''),
-})
 
 const getMatchStartTime = (value) => {
   if (!value) {
@@ -296,7 +242,7 @@ const sanitizePastGamePlayer = (player, fallbackId) => ({
   firstName: String(player?.firstName || '').trim(),
   lastName: String(player?.lastName || '').trim(),
   skill: String(player?.skill || 'beginner'),
-  team: player?.team === 'withoutPenny' ? 'withoutPenny' : 'penny',
+  team: sanitizeTeam(player?.team),
 })
 
 const normalizePastGamePlayers = (players) => {
@@ -313,8 +259,10 @@ const normalizePastGamePlayers = (players) => {
 
 const normalizePastGame = (game, index) => {
   const playedAt = String(game?.playedAt || '')
+  const teamCount = normalizeTeamCount(game?.teamCount)
   const fallbackTeams = groupPlayersByTeam(
     Array.isArray(game?.players) ? game.players : [],
+    teamCount,
   )
   const teams = game?.teams && typeof game.teams === 'object' ? game.teams : fallbackTeams
 
@@ -322,11 +270,14 @@ const normalizePastGame = (game, index) => {
     id: String(game?.id || playedAt || `past-game-${index}`),
     playedAt,
     archivedAt: String(game?.archivedAt || ''),
+    teamCount,
     captains: normalizeCaptains(game?.captains),
-    teams: {
-      penny: normalizePastGamePlayers(teams.penny),
-      withoutPenny: normalizePastGamePlayers(teams.withoutPenny),
-    },
+    teams: Object.fromEntries(
+      getActiveTeamKeys(teamCount).map((teamKey) => [
+        teamKey,
+        normalizePastGamePlayers(teams[teamKey]),
+      ]),
+    ),
   }
 }
 
@@ -346,7 +297,8 @@ const createPastGameSnapshot = (match, players) => {
     return null
   }
 
-  const teams = groupPlayersByTeam(players)
+  const teamCount = normalizeTeamCount(match.teamCount)
+  const teams = groupPlayersByTeam(players, teamCount)
   const snapshotPlayers = (teamPlayers) =>
     teamPlayers.map((player, index) =>
       sanitizePastGamePlayer(player, player.id || `past-player-${index}`),
@@ -356,11 +308,14 @@ const createPastGameSnapshot = (match, players) => {
     id: `game-${getMatchStartTime(match.nextMatchAt)}`,
     playedAt: match.nextMatchAt,
     archivedAt: new Date().toISOString(),
+    teamCount,
     captains: normalizeCaptains(match.captains),
-    teams: {
-      penny: snapshotPlayers(teams.penny),
-      withoutPenny: snapshotPlayers(teams.withoutPenny),
-    },
+    teams: Object.fromEntries(
+      getActiveTeamKeys(teamCount).map((teamKey) => [
+        teamKey,
+        snapshotPlayers(teams[teamKey]),
+      ]),
+    ),
   }
 }
 
@@ -377,55 +332,6 @@ const buildPastGames = (match, players) => {
     ...currentPastGames.filter((game) => game.playedAt !== snapshot.playedAt),
   ].slice(0, PREVIOUS_TABLE_LIMIT)
 }
-
-const preferredCaptainId = (players, teamKey, currentCaptainId = '') => {
-  const teamPlayers = players.filter((player) => player.team === teamKey)
-  if (teamPlayers.length === 0) {
-    return ''
-  }
-
-  const preferredPlayers = [...teamPlayers].sort((a, b) => {
-    const priorityDifference =
-      getCaptainPriority(a.skill) - getCaptainPriority(b.skill)
-
-    if (priorityDifference !== 0) {
-      return priorityDifference
-    }
-
-    return (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id)
-  })
-  const preferredPlayer = preferredPlayers[0]
-  const currentCaptain = teamPlayers.find((player) => player.id === currentCaptainId)
-
-  if (
-    currentCaptain &&
-    getCaptainPriority(currentCaptain.skill) ===
-      getCaptainPriority(preferredPlayer.skill)
-  ) {
-    return currentCaptain.id
-  }
-
-  return preferredPlayer.id
-}
-
-const resolveCaptains = (players, captains) => {
-  const currentCaptains = normalizeCaptains(captains)
-
-  return TEAM_KEYS.reduce((nextCaptains, teamKey) => {
-    const hasCurrentCaptain = players.some(
-      (player) => player.team === teamKey && player.id === currentCaptains[teamKey],
-    )
-
-    nextCaptains[teamKey] = hasCurrentCaptain
-      ? preferredCaptainId(players, teamKey, currentCaptains[teamKey])
-      : preferredCaptainId(players, teamKey)
-
-    return nextCaptains
-  }, {})
-}
-
-const captainsChanged = (currentCaptains, nextCaptains) =>
-  TEAM_KEYS.some((teamKey) => currentCaptains[teamKey] !== nextCaptains[teamKey])
 
 function useRoute() {
   const [route, setRoute] = useState(routeFromHash)
@@ -522,7 +428,6 @@ function App() {
   const [route, navigate] = useRoute()
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenuTimer = useRef(null)
-  const captainSyncing = useRef(false)
   const gameLifecycleSyncing = useRef(false)
   const [darkMode, setDarkMode] = useState(
     () => window.localStorage.getItem(DARK_MODE_KEY) === 'true',
@@ -576,37 +481,6 @@ function App() {
   useEffect(() => {
     const resetTime = getMatchResetTime(rosterState.match?.nextMatchAt)
 
-    if (
-      !rosterState.match ||
-      captainSyncing.current ||
-      gameLifecycleSyncing.current ||
-      (resetTime && resetTime <= Date.now())
-    ) {
-      return
-    }
-
-    const currentCaptains = normalizeCaptains(rosterState.match.captains)
-    const nextCaptains = resolveCaptains(rosterState.players, currentCaptains)
-
-    if (!captainsChanged(currentCaptains, nextCaptains)) {
-      return
-    }
-
-    captainSyncing.current = true
-    updateMatch({
-      ...rosterState.match,
-      captains: nextCaptains,
-    })
-      .then(refreshState)
-      .catch((error) => setDataError(error.message))
-      .finally(() => {
-        captainSyncing.current = false
-      })
-  }, [rosterState.match, rosterState.players])
-
-  useEffect(() => {
-    const resetTime = getMatchResetTime(rosterState.match?.nextMatchAt)
-
     if (!resetTime || gameLifecycleSyncing.current) {
       return
     }
@@ -642,8 +516,12 @@ function App() {
   }, [rosterState.match, rosterState.players])
 
   const teams = useMemo(
-    () => groupPlayersByTeam(rosterState.players),
-    [rosterState.players],
+    () =>
+      groupPlayersByTeam(
+        rosterState.players,
+        rosterState.match?.teamCount,
+      ),
+    [rosterState.match?.teamCount, rosterState.players],
   )
 
   return (
@@ -910,9 +788,8 @@ function PublicPage({ dataError, match, refreshState, teams }) {
           <p className="eyebrow">Bellevue College pickup board</p>
           <h1>Soccer teams, saved live for everyone.</h1>
           <p className="hero-text">
-            Add your name and skill level. The board balances the penny and
-            without-penny teams by skill score so everyone can see the teams
-            before kickoff.
+            Add your name and skill level. The board automatically balances the
+            selected teams by player count and skill score before kickoff.
           </p>
         </div>
         <MatchCountdown match={match} />
@@ -923,7 +800,11 @@ function PublicPage({ dataError, match, refreshState, teams }) {
           refreshState={refreshState}
           registrationOpen={registrationOpen}
         />
-        <TeamTables captains={match?.captains} teams={teams} />
+        <TeamTables
+          captains={match?.captains}
+          teamCount={match?.teamCount}
+          teams={teams}
+        />
       </section>
 
       <BalanceGuide />
@@ -1049,8 +930,8 @@ function BalanceGuide() {
         <h2>Equal numbers help, but skill distribution makes the table fair.</h2>
         <p>
           Beginner counts as 1 point, Intermediate as 2, Semi-pro as 3, and
-          Professional as 4. The table can be completely rearranged whenever a
-          new player joins or staff sees a better way to keep both teams close.
+          Professional as 4. The table is recalculated whenever a new player
+          joins or staff changes the roster, keeping every active team close.
           Captains are picked by skill priority: Semi-pro, then Professional,
           then Intermediate, then Beginner.
         </p>
@@ -1102,28 +983,25 @@ function TeamTables({
   onCaptainChange,
   onPlayerChange,
   onRemove,
+  teamCount,
   teams,
 }) {
+  const teamKeys = getActiveTeamKeys(teamCount)
+
   return (
-    <div className="teams-panel">
-      <TeamTable
-        captains={captains}
-        players={teams.penny}
-        teamKey="penny"
-        editable={editable}
-        onCaptainChange={onCaptainChange}
-        onPlayerChange={onPlayerChange}
-        onRemove={onRemove}
-      />
-      <TeamTable
-        captains={captains}
-        players={teams.withoutPenny}
-        teamKey="withoutPenny"
-        editable={editable}
-        onCaptainChange={onCaptainChange}
-        onPlayerChange={onPlayerChange}
-        onRemove={onRemove}
-      />
+    <div className="teams-panel" data-team-count={teamKeys.length}>
+      {teamKeys.map((teamKey) => (
+        <TeamTable
+          captains={captains}
+          players={teams[teamKey] || []}
+          teamKey={teamKey}
+          editable={editable}
+          key={teamKey}
+          onCaptainChange={onCaptainChange}
+          onPlayerChange={onPlayerChange}
+          onRemove={onRemove}
+        />
+      ))}
     </div>
   )
 }
@@ -1137,8 +1015,6 @@ function TeamTable({
   players,
   teamKey,
 }) {
-  const targetTeam = teamKey === 'penny' ? 'withoutPenny' : 'penny'
-  const moveLabel = teamKey === 'penny' ? 'Send to Team 2' : 'Send to Team 1'
   const captainId = normalizeCaptains(captains)[teamKey]
   const captain = players.find((player) => player.id === captainId)
   const skillScore = getTeamSkillScore(players)
@@ -1191,14 +1067,13 @@ function TeamTable({
               <th>No.</th>
               <th>Name</th>
               <th>Skill level</th>
-              {editable ? <th>Move</th> : null}
               {editable ? <th>Remove</th> : null}
             </tr>
           </thead>
           <tbody>
             {players.length === 0 ? (
               <tr>
-                <td colSpan={editable ? 5 : 3} className="empty-cell">
+                <td colSpan={editable ? 4 : 3} className="empty-cell">
                   No players yet
                 </td>
               </tr>
@@ -1254,17 +1129,6 @@ function TeamTable({
                     )}
                   </td>
                   {editable ? (
-                    <td data-label="Move">
-                      <button
-                        className="icon-text-button move-team-button"
-                        type="button"
-                        onClick={() => onPlayerChange(player.id, { team: targetTeam })}
-                      >
-                        {moveLabel}
-                      </button>
-                    </td>
-                  ) : null}
-                  {editable ? (
                     <td data-label="Remove">
                       <button
                         className="icon-text-button danger"
@@ -1286,9 +1150,7 @@ function TeamTable({
 }
 
 function StaffPage({ rosterState, refreshState, onBack }) {
-  const [authenticated, setAuthenticated] = useState(
-    () => sessionStorage.getItem('bcStaffAuthed') === STAFF_PASSWORD,
-  )
+  const [authenticated, setAuthenticated] = useState(isStaffAuthenticated)
   const [staffName, setStaffName] = useState(() => {
     const saved = sessionStorage.getItem('bcStaffName')
     return saved ? JSON.parse(saved) : null
@@ -1299,10 +1161,7 @@ function StaffPage({ rosterState, refreshState, onBack }) {
       <StaffLogin
         pastGames={rosterState.match?.pastGames}
         onBack={onBack}
-        onAuthenticated={() => {
-          sessionStorage.setItem('bcStaffAuthed', STAFF_PASSWORD)
-          setAuthenticated(true)
-        }}
+        onAuthenticated={() => setAuthenticated(true)}
       />
     )
   }
@@ -1324,17 +1183,23 @@ function StaffPage({ rosterState, refreshState, onBack }) {
 function StaffLogin({ pastGames, onBack, onAuthenticated }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const [showPastGames, setShowPastGames] = useState(false)
   const savedPastGames = normalizePastGames(pastGames)
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    if (password === STAFF_PASSWORD) {
-      onAuthenticated()
-      return
-    }
+    setError('')
+    setSubmitting(true)
 
-    setError('Wrong staff password.')
+    try {
+      await authenticateStaff(password)
+      onAuthenticated()
+    } catch (loginError) {
+      setError(loginError.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -1356,8 +1221,8 @@ function StaffLogin({ pastGames, onBack, onAuthenticated }) {
               placeholder="Staff password"
             />
           </label>
-          <button className="submit-button" type="submit">
-            Login
+          <button className="submit-button" type="submit" disabled={submitting}>
+            {submitting ? 'Checking password...' : 'Login'}
           </button>
           {error ? <p className="form-notice error">{error}</p> : null}
         </form>
@@ -1395,8 +1260,9 @@ function PastGameCard({ game }) {
         <h2>{formatMatchDate(game.playedAt)}</h2>
       </div>
       <div className="past-game-teams">
-        <PastGameTeam game={game} teamKey="penny" />
-        <PastGameTeam game={game} teamKey="withoutPenny" />
+        {getActiveTeamKeys(game.teamCount).map((teamKey) => (
+          <PastGameTeam game={game} teamKey={teamKey} key={teamKey} />
+        ))}
       </div>
     </article>
   )
@@ -1508,14 +1374,10 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
     setMatchDate(toDateTimeLocal(rosterState.match?.nextMatchAt))
   }, [rosterState.match?.nextMatchAt])
 
+  const teamCount = normalizeTeamCount(rosterState.match?.teamCount)
   const teams = useMemo(
-    () => ({
-      penny: draftPlayers.filter((player) => player.team === 'penny'),
-      withoutPenny: draftPlayers.filter(
-        (player) => player.team === 'withoutPenny',
-      ),
-    }),
-    [draftPlayers],
+    () => groupPlayersByTeam(draftPlayers, teamCount),
+    [draftPlayers, teamCount],
   )
   const previousTables = normalizePastGames(rosterState.match?.pastGames)
 
@@ -1523,15 +1385,22 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
     setSaving('Saving changes...')
 
     try {
-      await replacePlayers(
-        players.map((player) => ({
-          ...player,
-          firstName: normalizeName(player.firstName),
-          lastName: normalizeName(player.lastName),
-          updatedAt: new Date().toISOString(),
-          updatedBy: `${staffName.firstName} ${staffName.lastName}`,
-        })),
-      )
+      const preparedPlayers = players.map((player) => ({
+        ...player,
+        firstName: normalizeName(player.firstName),
+        lastName: normalizeName(player.lastName),
+        updatedAt: new Date().toISOString(),
+        updatedBy: `${staffName.firstName} ${staffName.lastName}`,
+      }))
+
+      if (preparedPlayers.some((player) => !player.firstName || !player.lastName)) {
+        setSaving('Every player needs a first and last name before saving.')
+        return
+      }
+
+      const balancedPlayers = balanceTeamAssignments(preparedPlayers, teamCount)
+      await replacePlayers(balancedPlayers)
+      setDraftPlayers(balancedPlayers)
       setRosterDirty(false)
       await refreshState()
       setSaving(message)
@@ -1542,20 +1411,28 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
 
   const handlePlayerChange = (playerId, changes) => {
     setDraftPlayers((players) =>
-      players.map((player) =>
-        player.id === playerId
-          ? {
-              ...player,
-              ...changes,
-            }
-          : player,
+      balanceTeamAssignments(
+        players.map((player) =>
+          player.id === playerId
+            ? {
+                ...player,
+                ...changes,
+              }
+            : player,
+        ),
+        teamCount,
       ),
     )
     setRosterDirty(true)
   }
 
   const handleRemove = (playerId) => {
-    setDraftPlayers((players) => players.filter((player) => player.id !== playerId))
+    setDraftPlayers((players) =>
+      balanceTeamAssignments(
+        players.filter((player) => player.id !== playerId),
+        teamCount,
+      ),
+    )
     setRosterDirty(true)
     setSaving('Player removed from the draft roster.')
   }
@@ -1564,16 +1441,55 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
     await savePlayers(draftPlayers, 'Roster updated.')
   }
 
-  const handleResetRoster = () => {
+  const handleDiscardRosterChanges = () => {
     setDraftPlayers(rosterState.players)
     setRosterDirty(false)
-    setSaving('Roster draft reset.')
+    setSaving('Unsaved roster changes discarded.')
   }
 
   const handleRebalanceTeams = () => {
-    setDraftPlayers((players) => balanceTeamAssignments(players))
+    setDraftPlayers((players) => balanceTeamAssignments(players, teamCount))
     setRosterDirty(true)
     setSaving('Draft rebalanced by skill score. Save roster changes to publish it.')
+  }
+
+  const handleTeamCountChange = async (nextTeamCount) => {
+    if (!rosterState.match || nextTeamCount === teamCount) {
+      return
+    }
+
+    const preparedPlayers = draftPlayers.map((player) => ({
+      ...player,
+      firstName: normalizeName(player.firstName),
+      lastName: normalizeName(player.lastName),
+      updatedAt: new Date().toISOString(),
+      updatedBy: `${staffName.firstName} ${staffName.lastName}`,
+    }))
+
+    if (preparedPlayers.some((player) => !player.firstName || !player.lastName)) {
+      setSaving('Finish every player name before changing the number of teams.')
+      return
+    }
+
+    const balancedPlayers = balanceTeamAssignments(preparedPlayers, nextTeamCount)
+    setSaving(`Changing to ${nextTeamCount} teams...`)
+
+    try {
+      await updateMatch({
+        ...rosterState.match,
+        teamCount: nextTeamCount,
+        captains: resolveCaptains(balancedPlayers, {}, nextTeamCount),
+        updatedAt: new Date().toISOString(),
+        updatedBy: `${staffName.firstName} ${staffName.lastName}`,
+      })
+      await replacePlayers(balancedPlayers)
+      setDraftPlayers(balancedPlayers)
+      setRosterDirty(false)
+      await refreshState()
+      setSaving(`${nextTeamCount} balanced teams are now published.`)
+    } catch (error) {
+      setSaving(error.message)
+    }
   }
 
   const handleCaptainChange = async (teamKey, playerId) => {
@@ -1613,7 +1529,11 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
         nextMatchAt,
         captains: dateChanged
           ? normalizeCaptains()
-          : resolveCaptains(rosterState.players, rosterState.match?.captains),
+          : resolveCaptains(
+              rosterState.players,
+              rosterState.match?.captains,
+              teamCount,
+            ),
         pastGames,
         updatedAt: new Date().toISOString(),
         updatedBy: `${staffName.firstName} ${staffName.lastName}`,
@@ -1649,19 +1569,38 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
           <p className="section-kicker">Staff dashboard</p>
           <h1>Manage teams and the next soccer date.</h1>
         </div>
-        <form className="date-form" onSubmit={handleMatchSubmit}>
-          <label>
-            <span>Next soccer date and time</span>
-            <input
-              type="datetime-local"
-              value={matchDate}
-              onChange={(event) => setMatchDate(event.target.value)}
-            />
-          </label>
-          <button className="submit-button" type="submit">
-            Save date
-          </button>
-        </form>
+        <div className="match-settings">
+          <fieldset className="team-count-control">
+            <legend>Number of teams</legend>
+            <div className="team-count-options">
+              {TEAM_COUNT_OPTIONS.map((option) => (
+                <button
+                  className="team-count-button"
+                  type="button"
+                  aria-pressed={teamCount === option}
+                  disabled={!rosterState.match}
+                  key={option}
+                  onClick={() => handleTeamCountChange(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <form className="date-form" onSubmit={handleMatchSubmit}>
+            <label>
+              <span>Next soccer date and time</span>
+              <input
+                type="datetime-local"
+                value={matchDate}
+                onChange={(event) => setMatchDate(event.target.value)}
+              />
+            </label>
+            <button className="submit-button" type="submit">
+              Save date
+            </button>
+          </form>
+        </div>
       </section>
 
       <section className="member-scroll-panel">
@@ -1680,9 +1619,9 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
             className="back-button"
             type="button"
             disabled={!rosterDirty}
-            onClick={handleResetRoster}
+            onClick={handleDiscardRosterChanges}
           >
-            Reset draft
+            Discard changes
           </button>
           <button
             className="back-button"
@@ -1707,6 +1646,7 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
         <TeamTables
           captains={rosterState.match?.captains}
           editable
+          teamCount={teamCount}
           teams={teams}
           onCaptainChange={handleCaptainChange}
           onPlayerChange={handlePlayerChange}

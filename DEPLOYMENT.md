@@ -28,9 +28,11 @@ The workflow at `.github/workflows/deploy.yml` builds the app, uploads `dist/` t
 Before enabling automatic deploys:
 
 1. Create an AWS IAM role trusted by GitHub OIDC for `repo:isra2507/soccerbc:ref:refs/heads/main`.
-2. Give that role permission to sync `s3://bcsoccerclub` and create invalidations for distribution `E2ROO7A769UCO2`.
+2. Give that role permission to sync `s3://bcsoccerclub`, create invalidations for distribution `E2ROO7A769UCO2`, and update the `bcsoccerclub-api` Lambda code and configuration.
 3. In GitHub, add an Actions secret named `AWS_ROLE_ARN` with that role ARN.
-4. In GitHub, add an Actions variable named `AWS_DEPLOY_ENABLED` with value `true`.
+4. Run `npm run hash-password` locally, then add its output as a `STAFF_PASSWORD_HASH` Actions secret.
+5. Add a `STAFF_AUTH_SECRET` Actions secret containing at least 32 random bytes. For example, generate one with `openssl rand -base64 48`.
+6. In GitHub, add an Actions variable named `AWS_DEPLOY_ENABLED` with value `true`.
 
 The deploy job stays skipped until `AWS_DEPLOY_ENABLED` is set to `true`.
 
@@ -48,4 +50,13 @@ Current AWS backend resources:
 - Lambda environment variable: `TABLE_NAME=bcsoccerclub-state`
 
 The frontend build uses `VITE_API_BASE_URL` from `.github/workflows/deploy.yml`.
-The Lambda source to paste into AWS is saved at `lambda/bcsoccerclub-api.mjs`.
+The Lambda source is saved at `lambda/bcsoccerclub-api.mjs` and is deployed by
+the GitHub Actions workflow before the static site. The Lambda environment must
+contain:
+
+- `TABLE_NAME=bcsoccerclub-state`
+- `STAFF_PASSWORD_HASH` in `pbkdf2-sha256$iterations$saltBase64$hashBase64` format
+- `STAFF_AUTH_SECRET` with at least 32 random bytes
+
+The API Gateway CORS configuration must allow the `Authorization` and
+`Content-Type` request headers so signed staff requests reach Lambda.

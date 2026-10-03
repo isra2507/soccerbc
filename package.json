@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "hash-password": "node scripts/hash-password.mjs",
     "lint": "oxlint",
+    "test": "node --test",
+    "test:browser": "node scripts/browser-smoke.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

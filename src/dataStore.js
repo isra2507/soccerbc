@@ -1,13 +1,21 @@
+import {
+  clearStaffToken,
+  getStaffToken,
+  storeStaffToken,
+  verifyLocalStaffPassword,
+} from './auth.js'
+import {
+  balanceTeamAssignments,
+  getActiveTeamKeys,
+  normalizeCaptains,
+  normalizeTeamCount,
+  resolveCaptains,
+  sanitizeTeam,
+} from './teamLogic.js'
+
 const LOCAL_STORAGE_KEY = 'bc-soccer-live-board'
 const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
 const PREVIOUS_TABLE_LIMIT = 1
-const TEAM_KEYS = ['penny', 'withoutPenny']
-const SKILL_POINTS = {
-  beginner: 1,
-  intermediate: 2,
-  'semi-pro': 3,
-  professional: 4,
-}
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/g, '')
 const firebaseDatabaseUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL?.trim()
@@ -31,6 +39,7 @@ const sharedDatabaseRequiredMessage =
 const emptyState = {
   players: [],
   match: {
+    teamCount: 2,
     nextMatchAt: '',
     updatedAt: '',
     updatedBy: '',
@@ -40,13 +49,6 @@ const emptyState = {
       withoutPenny: '',
     },
   },
-}
-
-function normalizeCaptains(captains) {
-  return {
-    penny: String(captains?.penny || ''),
-    withoutPenny: String(captains?.withoutPenny || ''),
-  }
 }
 
 function getTime(value) {
@@ -63,9 +65,6 @@ function isPreviousTableFresh(game) {
 
   return savedTime !== null && Date.now() - savedTime <= PREVIOUS_TABLE_HOLD_MS
 }
-
-const sanitizeTeam = (team) => (team === 'withoutPenny' ? 'withoutPenny' : 'penny')
-const getSkillValue = (skill) => SKILL_POINTS[skill] ?? SKILL_POINTS.beginner
 
 const sanitizePlayer = (player, fallbackId) => ({
   id: String(player?.id || fallbackId),
@@ -103,54 +102,11 @@ function normalizePlayers(players) {
     .sort((a, b) => (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id))
 }
 
-function balanceTeamAssignments(players) {
-  const normalizedPlayers = normalizePlayers(players)
-  const teamState = TEAM_KEYS.reduce((state, teamKey) => {
-    state[teamKey] = { count: 0, score: 0 }
-    return state
-  }, {})
-  const maxTeamSize = Math.ceil(normalizedPlayers.length / TEAM_KEYS.length)
-  const assignments = new Map()
-  const sortedPlayers = [...normalizedPlayers].sort((a, b) => {
-    const skillDifference = getSkillValue(b.skill) - getSkillValue(a.skill)
-
-    if (skillDifference !== 0) {
-      return skillDifference
-    }
-
-    return (a.joinedAt || a.id).localeCompare(b.joinedAt || b.id)
-  })
-
-  sortedPlayers.forEach((player) => {
-    const availableTeams = TEAM_KEYS.filter(
-      (teamKey) => teamState[teamKey].count < maxTeamSize,
-    )
-    const targetTeam = availableTeams.sort((a, b) => {
-      const scoreDifference = teamState[a].score - teamState[b].score
-
-      if (scoreDifference !== 0) {
-        return scoreDifference
-      }
-
-      return teamState[a].count - teamState[b].count
-    })[0]
-
-    teamState[targetTeam].count += 1
-    teamState[targetTeam].score += getSkillValue(player.skill)
-    assignments.set(player.id, targetTeam)
-  })
-
-  return normalizedPlayers.map((player) => ({
-    ...player,
-    team: assignments.get(player.id) || player.team,
-  }))
-}
-
-function addAndBalancePlayer(players, player) {
+function addAndBalancePlayer(players, player, teamCount) {
   return balanceTeamAssignments([
     ...normalizePlayers(players).filter((item) => item.id !== player.id),
     player,
-  ])
+  ], teamCount)
 }
 
 function normalizePastGamePlayers(players) {
@@ -166,16 +122,20 @@ function normalizePastGamePlayers(players) {
 function normalizePastGame(game, index) {
   const playedAt = String(game?.playedAt || '')
   const teams = game?.teams && typeof game.teams === 'object' ? game.teams : {}
+  const teamCount = normalizeTeamCount(game?.teamCount)
 
   return {
     id: String(game?.id || playedAt || `past-game-${index}`),
     playedAt,
     archivedAt: String(game?.archivedAt || ''),
+    teamCount,
     captains: normalizeCaptains(game?.captains),
-    teams: {
-      penny: normalizePastGamePlayers(teams.penny),
-      withoutPenny: normalizePastGamePlayers(teams.withoutPenny),
-    },
+    teams: Object.fromEntries(
+      getActiveTeamKeys(teamCount).map((teamKey) => [
+        teamKey,
+        normalizePastGamePlayers(teams[teamKey]),
+      ]),
+    ),
   }
 }
 
@@ -192,14 +152,21 @@ function normalizePastGames(pastGames) {
 
 function normalizeState(rawState) {
   const state = rawState && typeof rawState === 'object' ? rawState : emptyState
+  const teamCount = normalizeTeamCount(state.match?.teamCount)
+  const match = {
+    ...emptyState.match,
+    ...(state.match && typeof state.match === 'object' ? state.match : {}),
+    teamCount,
+    captains: normalizeCaptains(state.match?.captains),
+    pastGames: normalizePastGames(state.match?.pastGames),
+  }
+  const players = balanceTeamAssignments(normalizePlayers(state.players), teamCount)
 
   return {
-    players: normalizePlayers(state.players),
+    players,
     match: {
-      ...emptyState.match,
-      ...(state.match && typeof state.match === 'object' ? state.match : {}),
-      captains: normalizeCaptains(state.match?.captains),
-      pastGames: normalizePastGames(state.match?.pastGames),
+      ...match,
+      captains: resolveCaptains(players, match.captains, teamCount),
     },
     mode: hasSharedDatabase ? 'cloud' : requiresCloudDatabase ? 'missing-cloud' : 'local',
     message: requiresCloudDatabase ? sharedDatabaseRequiredMessage : '',
@@ -259,6 +226,9 @@ async function readJsonResponse(response, fallbackMessage) {
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearStaffToken()
+    }
     throw new Error(payload?.message || fallbackMessage)
   }
 
@@ -270,10 +240,12 @@ async function readJsonResponse(response, fallbackMessage) {
 }
 
 async function apiRequest(method, path, body) {
+  const staffToken = getStaffToken()
   const response = await fetch(apiUrl(path), {
     method,
     headers: {
       'Content-Type': 'application/json',
+      ...(staffToken ? { Authorization: `Bearer ${staffToken}` } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
@@ -338,7 +310,7 @@ async function seedApiFromLocalIfEmpty(apiState) {
   }
 
   const localState = getLocalState()
-  if (!hasBoardContent(localState)) {
+  if (!hasBoardContent(localState) || !getStaffToken()) {
     return apiState
   }
 
@@ -371,6 +343,29 @@ export async function loadState() {
   return seedCloudFromLocalIfEmpty(normalizeState(state))
 }
 
+export async function authenticateStaff(password) {
+  if (hasApiBackend) {
+    const result = await apiRequest('POST', '/auth', { password })
+
+    if (!result.token) {
+      throw new Error('Staff login did not return a session token.')
+    }
+
+    storeStaffToken(result.token)
+    return
+  }
+
+  if (!(await verifyLocalStaffPassword(password))) {
+    throw new Error('Wrong staff password.')
+  }
+
+  storeStaffToken(`local-${Date.now()}`)
+}
+
+export function isStaffAuthenticated() {
+  return Boolean(getStaffToken())
+}
+
 export async function addPlayer(player) {
   assertWritableStorage()
 
@@ -383,7 +378,11 @@ export async function addPlayer(player) {
     const current = getLocalState()
     setLocalState({
       ...current,
-      players: addAndBalancePlayer(current.players, player),
+      players: addAndBalancePlayer(
+        current.players,
+        player,
+        current.match.teamCount,
+      ),
     })
     return
   }
@@ -392,7 +391,9 @@ export async function addPlayer(player) {
   await firebaseRequest(
     'PUT',
     'players',
-    playersToRecord(addAndBalancePlayer(current.players, player)),
+    playersToRecord(
+      addAndBalancePlayer(current.players, player, current.match.teamCount),
+    ),
   )
 }
 
@@ -408,12 +409,14 @@ export async function replacePlayers(players) {
     const current = getLocalState()
     setLocalState({
       ...current,
-      players,
+      players: balanceTeamAssignments(players, current.match.teamCount),
     })
     return
   }
 
-  await firebaseRequest('PUT', 'players', playersToRecord(players))
+  const current = await loadState()
+  const balancedPlayers = balanceTeamAssignments(players, current.match.teamCount)
+  await firebaseRequest('PUT', 'players', playersToRecord(balancedPlayers))
 }
 
 export async function updateMatch(match) {
@@ -426,14 +429,23 @@ export async function updateMatch(match) {
 
   if (!hasFirebaseDatabase) {
     const current = getLocalState()
+    const teamCount = normalizeTeamCount(match?.teamCount)
     setLocalState({
       ...current,
-      match,
+      players: balanceTeamAssignments(current.players, teamCount),
+      match: { ...match, teamCount },
     })
     return
   }
 
-  await firebaseRequest('PUT', 'match', match)
+  const teamCount = normalizeTeamCount(match?.teamCount)
+  const current = await loadState()
+  await firebaseRequest('PUT', 'match', { ...match, teamCount })
+  await firebaseRequest(
+    'PUT',
+    'players',
+    playersToRecord(balanceTeamAssignments(current.players, teamCount)),
+  )
 }
 
 export function subscribeState(onChange, onError) {

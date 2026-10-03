@@ -1,7 +1,7 @@
 # BC Soccer Club
 
-Public React + Vite site for soccer player signup, randomized team assignment,
-staff team management, and a next-match countdown.
+Public React + Vite site for soccer player signup, automatic balancing across
+two to four teams, staff team management, and a next-match countdown.
 
 ## Run locally
 
@@ -32,11 +32,14 @@ VITE_API_BASE_URL=https://6oumqshk75.execute-api.us-east-1.amazonaws.com
 
 The Lambda source to paste into AWS is saved at `lambda/bcsoccerclub-api.mjs`.
 
-The staff password in the frontend is:
+Local development verifies the staff password with PBKDF2-SHA256. Production
+verification happens in Lambda, which returns an eight-hour signed staff token;
+the plain password is never stored in the frontend or browser session storage.
 
-```text
-Football11!
+## Verify changes
+
+```bash
+npm test
+npm run lint
+npm run build
 ```
-
-This is enough for a club signup board, but it is not strong security. A future
-version should use real staff accounts before collecting sensitive information.
