@@ -60,3 +60,9 @@ contain:
 
 The API Gateway CORS configuration must allow the `Authorization` and
 `Content-Type` request headers so signed staff requests reach Lambda.
+
+Until the GitHub role has `lambda:UpdateFunctionCode` and
+`lambda:UpdateFunctionConfiguration`, the workflow continues with the static
+site deployment and the frontend uses hashed local password verification for
+compatibility with the current API. Add those permissions to activate signed
+server-side staff sessions on the next deployment.

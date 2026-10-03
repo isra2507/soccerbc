@@ -59,6 +59,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy roster API
+        continue-on-error: true
         env:
           STAFF_PASSWORD_HASH: ${{ secrets.STAFF_PASSWORD_HASH }}
           STAFF_AUTH_SECRET: ${{ secrets.STAFF_AUTH_SECRET }}

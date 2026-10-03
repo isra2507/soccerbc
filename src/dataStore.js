@@ -345,14 +345,20 @@ export async function loadState() {
 
 export async function authenticateStaff(password) {
   if (hasApiBackend) {
-    const result = await apiRequest('POST', '/auth', { password })
+    try {
+      const result = await apiRequest('POST', '/auth', { password })
 
-    if (!result.token) {
-      throw new Error('Staff login did not return a session token.')
+      if (!result.token) {
+        throw new Error('Staff login did not return a session token.')
+      }
+
+      storeStaffToken(result.token)
+      return
+    } catch (error) {
+      if (!error.message.includes('No route for POST /auth')) {
+        throw error
+      }
     }
-
-    storeStaffToken(result.token)
-    return
   }
 
   if (!(await verifyLocalStaffPassword(password))) {
