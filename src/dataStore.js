@@ -355,11 +355,14 @@ export async function authenticateStaff(password) {
       storeStaffToken(result.token)
       return
     } catch (error) {
-      const authRouteMissing =
+      const authEndpointUnavailable =
         error.message === 'Not Found' ||
-        error.message.includes('No route for POST /auth')
+        error.message.includes('No route for POST /auth') ||
+        error.message === 'Failed to fetch' ||
+        error.message.includes('NetworkError') ||
+        error.message.includes('Load failed')
 
-      if (!authRouteMissing) {
+      if (!authEndpointUnavailable) {
         throw error
       }
     }
