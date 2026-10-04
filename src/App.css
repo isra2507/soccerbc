@@ -1954,7 +1954,22 @@ tr:last-child td {
 .announcement-editor { display: grid; gap: 12px; padding: 20px; border-radius: 8px; background: rgba(255,255,255,.85); color: #082f49; }
 .announcement-editor p { margin: 0; line-height: 1.5; }
 .announcement-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 12px; border: 1px solid #64748b; border-radius: 6px; font: inherit; }
-.game-notice { overflow: hidden; margin-bottom: 20px; padding: 16px 0; border: 2px solid #eab308; border-radius: 8px; background: #fef9c3; color: #422006; }
+.game-notice {
+  overflow: hidden;
+  margin-bottom: 20px;
+  padding: 16px 0;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #b91c1c;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #7f1d1d;
+}
+.dark-mode .game-notice {
+  border-color: #71343b;
+  border-left-color: #f87171;
+  background: #291d25;
+  color: #fecaca;
+}
 .game-notice-scroll { display: inline-block; width: max-content; white-space: nowrap; margin: 0; padding-left: 100%; animation: college-notice-scroll 30s linear infinite; }
 .game-notice:hover .game-notice-scroll,
 .game-notice:focus .game-notice-scroll { animation-play-state: paused; }
