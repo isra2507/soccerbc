@@ -819,8 +819,9 @@ function PublicPage({ dataError, match, refreshState, teams }) {
           <h1>Bellevue College Soccer Club</h1>
           <p className="hero-text">
             <strong>We meet every Friday at 11:00 AM on the Bellevue College soccer field.
-              Everyone is welcome, regardless of gender or experience—even if you have never played soccer before!
-              Please be on time, register only if you are coming, and check which team you’re on before coming onto the field.</strong>
+              Everyone is welcome! All genders and skill levels can join, even if you have never played soccer before.
+              Please be on time, register only if you are coming, and check which team you’re on before coming onto the field.
+              Don’t forget to have fun!</strong>
           </p>
           <p className="club-contact">
             Have a question or concern, or need your name removed because you can’t make it?
