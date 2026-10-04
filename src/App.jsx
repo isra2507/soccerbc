@@ -56,9 +56,9 @@ const SKILL_LEVELS = [
 
 const TEAM_LABELS = {
   penny: 'Team 1 (without pinnie)',
-  withoutPenny: 'Team 2 (blue)',
-  team3: 'Team 3 (red)',
-  team4: 'Team 4 (yellow)',
+  withoutPenny: 'Team 2 (blue penny)',
+  team3: 'Team 3 (red penny)',
+  team4: 'Team 4 (yellow penny)',
 }
 const TEAM_COLORS = { penny: 'none', withoutPenny: 'blue', team3: 'red', team4: 'yellow' }
 const NONDISCRIMINATION_NOTICE = 'Bellevue College does not discriminate on the basis of race or ethnicity; creed; color; national origin; sex; marital status; sexual orientation; age; religion; genetic information; the presence of any sensory, mental, or physical disability; or veteran status in educational programs and activities which it operates. Bellevue College is prohibited from discriminating in such a manner by college policy and by state and federal law. All college personnel and persons, vendors, and organizations with whom the college does business are required to comply with applicable federal and state statutes and regulations designed to promote affirmative action and equal opportunity.'
