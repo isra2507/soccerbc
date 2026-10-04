@@ -42,6 +42,7 @@ const emptyState = {
   match: {
     teamCount: 2,
     nextMatchAt: '',
+    announcement: '',
     updatedAt: '',
     updatedBy: '',
     pastGames: [],
@@ -159,6 +160,7 @@ function normalizeState(rawState) {
     ...emptyState.match,
     ...(state.match && typeof state.match === 'object' ? state.match : {}),
     teamCount,
+    announcement: String(state.match?.announcement || '').trim().slice(0, 1000),
     captains: normalizeCaptains(state.match?.captains),
     pastGames: normalizePastGames(state.match?.pastGames),
   }

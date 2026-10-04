@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { getActiveAnnouncement } from './announcements.js'
 import {
   addPlayer,
   authenticateStaff,
@@ -505,6 +506,7 @@ function App() {
     updateMatch({
       ...rosterState.match,
       nextMatchAt: '',
+      announcement: '',
       updatedAt: new Date().toISOString(),
       updatedBy: 'Automatic game reset',
       captains: normalizeCaptains(),
@@ -781,17 +783,50 @@ function SoccerBallRain() {
   )
 }
 
+function AnnouncementBanner({ match }) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const announcement = getActiveAnnouncement(match, now)
+  if (!announcement) return null
+  return (
+    <aside className="game-notice" aria-label="Match announcement" tabIndex={0}>
+      <p className="game-notice-scroll" key={announcement}><strong>Announcement: </strong>{announcement}</p>
+    </aside>
+  )
+}
+
 function PublicPage({ dataError, match, refreshState, teams }) {
   const registrationOpen = getMatchStartTime(match?.nextMatchAt) !== null
 
   return (
     <main>
+      <AnnouncementBanner match={match} />
+      <section className="discord-invite" aria-labelledby="discord-title">
+        <div>
+          <h2 id="discord-title">Join our Discord group</h2>
+          <a href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer">Join our Discord group</a>
+          <p>Scan the QR code to connect with the club.</p>
+        </div>
+        <a href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer" aria-label="Join our Discord group using this QR code">
+          <img src="/discord-qr.svg" width="160" height="160" alt="QR code for the Bellevue College Soccer Club Discord group" />
+        </a>
+      </section>
       <section className="hero-panel">
         <div className="hero-copy">
           <h1>Bellevue College Soccer Club</h1>
           <p className="hero-text">
             <strong>We meet every Friday at 11:00 AM on the Bellevue College soccer field.
-              Please be on time and check which team you’re on before coming onto the field.</strong>
+              Everyone is welcome, regardless of gender or experience—even if you have never played soccer before!
+              Please be on time, register only if you are coming, and check which team you’re on before coming onto the field.</strong>
+          </p>
+          <p className="club-contact">
+            Have a question or concern, or need your name removed because you can’t make it?
+            Send us a message in our <a href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer">Discord group</a>.
+            If you don’t have Discord, email <a href="mailto:isra.sookun@bellevuecollege.edu">isra.sookun@bellevuecollege.edu</a> or{' '}
+            <a href="mailto:ro.sanchezrodriguez@bellevuecollege.edu">ro.sanchezrodriguez@bellevuecollege.edu</a>.
           </p>
         </div>
         <MatchCountdown match={match} />
@@ -1381,6 +1416,8 @@ function StaffIdentity({ onBack, onSaved }) {
 
 function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
   const [saving, setSaving] = useState('')
+  const [announcement, setAnnouncement] = useState(rosterState.match?.announcement || '')
+  const [announcementSaving, setAnnouncementSaving] = useState(false)
   const [draftPlayers, setDraftPlayers] = useState(rosterState.players)
   const [rosterDirty, setRosterDirty] = useState(false)
   const [showPreviousTable, setShowPreviousTable] = useState(false)
@@ -1397,6 +1434,33 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
   useEffect(() => {
     setMatchDate(toDateTimeLocal(rosterState.match?.nextMatchAt))
   }, [rosterState.match?.nextMatchAt])
+
+  useEffect(() => {
+    setAnnouncement(rosterState.match?.announcement || '')
+  }, [rosterState.match?.announcement, rosterState.match?.nextMatchAt])
+
+  const saveAnnouncement = async (text) => {
+    if (!getActiveAnnouncement({ ...rosterState.match, announcement: 'scheduled' })) {
+      setSaving('Set an upcoming soccer date before publishing an announcement.')
+      return
+    }
+    setAnnouncementSaving(true)
+    try {
+      await updateMatch({
+        ...rosterState.match,
+        announcement: text.trim().slice(0, 1000),
+        updatedAt: new Date().toISOString(),
+        updatedBy: `${staffName.firstName} ${staffName.lastName}`,
+      })
+      await refreshState()
+      setAnnouncement(text.trim())
+      setSaving(text.trim() ? 'Announcement published.' : 'Announcement removed.')
+    } catch (error) {
+      setSaving(error.message)
+    } finally {
+      setAnnouncementSaving(false)
+    }
+  }
 
   const teamCount = normalizeTeamCount(rosterState.match?.teamCount)
   const teams = useMemo(
@@ -1555,6 +1619,7 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
       await updateMatch({
         ...rosterState.match,
         nextMatchAt,
+        announcement: dateChanged ? '' : (rosterState.match?.announcement || ''),
         captains: dateChanged
           ? normalizeCaptains()
           : resolveCaptains(
@@ -1583,6 +1648,7 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
 
   return (
     <main className="staff-page member-dashboard-page">
+      <AnnouncementBanner match={rosterState.match} />
       <div className="staff-toolbar">
         <button className="back-button" type="button" onClick={onBack}>
           Back to public board
@@ -1633,6 +1699,22 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
 
       <section className="member-scroll-panel">
         {saving ? <p className="form-notice admin-notice">{saving}</p> : null}
+
+        <form className="announcement-editor" onSubmit={(event) => {
+          event.preventDefault()
+          saveAnnouncement(announcement)
+        }}>
+          <h2>Announcement</h2>
+          <p>Share a message for {formatMatchDate(rosterState.match?.nextMatchAt)}. It appears at the top of the public board and expires with the team tables, three hours after kickoff.</p>
+          <label htmlFor="match-announcement">Announcement for this soccer date</label>
+          <textarea id="match-announcement" rows={3} maxLength={1000} value={announcement}
+            onChange={(event) => setAnnouncement(event.target.value)} />
+          <div className="roster-actions">
+            <button className="submit-button" type="submit" disabled={announcementSaving || !rosterState.match?.nextMatchAt || !announcement.trim()}>Save announcement</button>
+            <button className="back-button" type="button" disabled={announcementSaving || !rosterState.match?.announcement}
+              onClick={() => saveAnnouncement('')}>Remove announcement</button>
+          </div>
+        </form>
 
         <section className="roster-actions" aria-label="Roster actions">
           <button

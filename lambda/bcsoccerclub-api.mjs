@@ -39,6 +39,7 @@ const emptyState = {
   match: {
     teamCount: 2,
     nextMatchAt: '',
+    announcement: '',
     updatedAt: '',
     updatedBy: '',
     pastGames: [],
@@ -272,6 +273,7 @@ function normalizeMatch(match) {
     ...emptyState.match,
     ...(match && typeof match === 'object' ? match : {}),
     teamCount: normalizeTeamCount(match?.teamCount),
+    announcement: String(match?.announcement || '').trim().slice(0, 1000),
     captains: normalizeCaptains(match?.captains),
     pastGames: normalizePastGames(match?.pastGames),
   }
@@ -519,6 +521,7 @@ async function readCurrentStateRecord() {
         match: {
           ...state.match,
           nextMatchAt: '',
+          announcement: '',
           updatedAt: new Date().toISOString(),
           updatedBy: 'Automatic game reset',
           captains: normalizeCaptains(),

@@ -192,10 +192,10 @@ try {
     move.dispatchEvent(new Event('change', { bubbles: true }));
   `)
   await waitForExpression("document.querySelector('.team-table[data-team-color=yellow]').textContent.includes('Player1')", 'Manual move did not update the draft.')
-  await evaluate("document.querySelector('.roster-actions .submit-button').click()")
+  await evaluate("document.querySelector('section.roster-actions .submit-button').click()")
   await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.find(p => p.id === 'smoke-1').team === 'team4'", 'Manual move did not persist.')
-  await evaluate("[...document.querySelectorAll('.roster-actions button')].find(b => b.textContent.trim() === 'Rebalance teams').click()")
-  await evaluate("document.querySelector('.roster-actions .submit-button').click()")
+  await evaluate("[...document.querySelectorAll('section.roster-actions button')].find(b => b.textContent.trim() === 'Rebalance teams').click()")
+  await evaluate("document.querySelector('section.roster-actions .submit-button').click()")
   await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.every(p => !p.manualTeam)", 'Rebalance did not clear manual assignments.')
 
   const fourTeamState = await evaluate(
@@ -211,14 +211,34 @@ try {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   `)
   await waitForExpression(
-    "document.querySelector('.roster-actions .submit-button')?.disabled === false",
+    "document.querySelector('section.roster-actions .submit-button')?.disabled === false",
     'The edited player did not mark the roster as changed.',
   )
-  await evaluate("document.querySelector('.roster-actions .submit-button').click()")
+  await evaluate("document.querySelector('section.roster-actions .submit-button').click()")
   await waitForExpression(
     "document.querySelector('.admin-notice')?.textContent.includes('Roster updated')",
     'The edited player was not saved.',
   )
+
+  for (const message of ['Bring water for Friday.', 'Kickoff reminder: arrive early.']) {
+    await evaluate(`
+      var announcementField = document.querySelector('#match-announcement');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(announcementField, ${JSON.stringify(message)});
+      announcementField.dispatchEvent(new Event('input', { bubbles: true }));
+    `)
+    await evaluate("document.querySelector('.announcement-editor').requestSubmit()")
+    await waitForExpression(`JSON.parse(localStorage.getItem('bc-soccer-live-board')).match.announcement === ${JSON.stringify(message)}`, 'Announcement did not save.')
+    await waitForExpression(`document.querySelector('.game-notice')?.textContent.includes(${JSON.stringify(message)})`, 'Saved announcement did not appear.')
+  }
+  await evaluate("[...document.querySelectorAll('.announcement-editor button')].find(b => b.textContent === 'Remove announcement').click()")
+  await waitForExpression("!document.querySelector('.game-notice') && JSON.parse(localStorage.getItem('bc-soccer-live-board')).match.announcement === ''", 'Announcement did not remove.')
+  await evaluate(`
+    var announcementField = document.querySelector('#match-announcement');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(announcementField, 'Bring water for Friday.');
+    announcementField.dispatchEvent(new Event('input', { bubbles: true }));
+  `)
+  await evaluate("document.querySelector('.announcement-editor').requestSubmit()")
+  await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).match.announcement === 'Bring water for Friday.'", 'Public announcement did not save.')
 
   await send('Page.navigate', { url: `${appUrl}/#/` })
   await waitForExpression(
@@ -226,6 +246,10 @@ try {
     'The public page did not reopen.',
   )
   assert.equal(await evaluate("document.querySelectorAll('.team-table').length"), 4)
+  assert.ok(await evaluate("document.querySelector('.game-notice').textContent.includes('Bring water for Friday.')"))
+  assert.equal(await evaluate("document.querySelector('.discord-invite a').href"), 'https://discord.gg/NeyphJrqW')
+  assert.ok(await evaluate("document.querySelector('.discord-invite img').naturalWidth > 0"))
+  assert.equal(await evaluate("document.querySelectorAll('.club-contact a[href^=\"mailto:\"]').length"), 2)
 
   await evaluate(`
     const setValue = (element, value) => {

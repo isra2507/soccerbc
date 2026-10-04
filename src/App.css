@@ -1945,3 +1945,18 @@ tr:last-child td {
 @media (prefers-reduced-motion: reduce) {
   .college-notice-scroll { width: auto; padding: 0 16px; white-space: normal; animation: none; }
 }
+
+.discord-invite { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 20px; padding: 22px; border-radius: 8px; background: #e0f2fe; color: #082f49; }
+.discord-invite p { margin: 12px 0 0; }
+.discord-invite img { display: block; border: 8px solid white; background: white; }
+.club-contact { line-height: 1.6; overflow-wrap: anywhere; }
+.hero-copy .club-contact a { color: inherit; font-weight: 700; text-decoration: underline; }
+.announcement-editor { display: grid; gap: 12px; padding: 20px; border-radius: 8px; background: rgba(255,255,255,.85); color: #082f49; }
+.announcement-editor p { margin: 0; line-height: 1.5; }
+.announcement-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 12px; border: 1px solid #64748b; border-radius: 6px; font: inherit; }
+.game-notice { overflow: hidden; margin-bottom: 20px; padding: 16px 0; border: 2px solid #eab308; border-radius: 8px; background: #fef9c3; color: #422006; }
+.game-notice-scroll { display: inline-block; width: max-content; white-space: nowrap; margin: 0; padding-left: 100%; animation: college-notice-scroll 30s linear infinite; }
+.game-notice:hover .game-notice-scroll,
+.game-notice:focus .game-notice-scroll { animation-play-state: paused; }
+@media (max-width: 600px) { .discord-invite { flex-direction: column; align-items: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .game-notice-scroll { width: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 16px; animation: none; } }
