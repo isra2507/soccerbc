@@ -38,7 +38,13 @@ export function balanceTeamAssignments(players = [], teamCount = 2) {
     teamKeys.map((teamKey) => [teamKey, { count: 0, score: 0 }]),
   )
   const assignments = new Map()
-  const sortedPlayers = [...players].sort((a, b) => {
+  const lockedPlayers = players.filter((player) => player.manualTeam && teamKeys.includes(player.team))
+  lockedPlayers.forEach((player) => {
+    teamState[player.team].count += 1
+    teamState[player.team].score += getSkillValue(player.skill)
+    assignments.set(player.id, player.team)
+  })
+  const sortedPlayers = players.filter((player) => !assignments.has(player.id)).sort((a, b) => {
     const skillDifference = getSkillValue(b.skill) - getSkillValue(a.skill)
 
     if (skillDifference !== 0) {
@@ -72,6 +78,7 @@ export function balanceTeamAssignments(players = [], teamCount = 2) {
   return players.map((player) => ({
     ...player,
     team: assignments.get(player.id) || teamKeys[0],
+    manualTeam: Boolean(player.manualTeam && teamKeys.includes(player.team)),
   }))
 }
 

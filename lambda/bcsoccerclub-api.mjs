@@ -90,6 +90,7 @@ const sanitizePlayer = (player, fallbackId = randomUUID()) => ({
   lastName: String(player?.lastName || '').trim(),
   skill: String(player?.skill || 'beginner'),
   team: sanitizeTeam(player?.team),
+  manualTeam: player?.manualTeam === true,
   joinedAt: String(player?.joinedAt || new Date().toISOString()),
   updatedAt: String(player?.updatedAt || ''),
   updatedBy: String(player?.updatedBy || ''),
@@ -127,7 +128,13 @@ function balanceTeamAssignments(players, teamCount = 2) {
     teamKeys.map((teamKey) => [teamKey, { count: 0, score: 0 }]),
   )
   const assignments = new Map()
-  const sortedPlayers = [...normalizedPlayers].sort((a, b) => {
+  const lockedPlayers = normalizedPlayers.filter((player) => player.manualTeam && teamKeys.includes(player.team))
+  lockedPlayers.forEach((player) => {
+    teamState[player.team].count += 1
+    teamState[player.team].score += getSkillValue(player.skill)
+    assignments.set(player.id, player.team)
+  })
+  const sortedPlayers = normalizedPlayers.filter((player) => !assignments.has(player.id)).sort((a, b) => {
     const skillDifference = getSkillValue(b.skill) - getSkillValue(a.skill)
 
     if (skillDifference !== 0) {
@@ -161,6 +168,7 @@ function balanceTeamAssignments(players, teamCount = 2) {
   return normalizedPlayers.map((player) => ({
     ...player,
     team: assignments.get(player.id) || teamKeys[0],
+    manualTeam: Boolean(player.manualTeam && teamKeys.includes(player.team)),
   }))
 }
 
@@ -567,7 +575,7 @@ function authenticate(event) {
 }
 
 async function addPlayer(event) {
-  const player = sanitizePlayer(parseBody(event))
+  const player = sanitizePlayer({ ...parseBody(event), manualTeam: false })
 
   if (!player.firstName || !player.lastName) {
     return jsonResponse(400, { message: 'First name and last name are required.' })

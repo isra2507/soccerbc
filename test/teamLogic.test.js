@@ -72,3 +72,26 @@ test('invalid team counts fall back to two teams', () => {
   assert.equal(normalizeTeamCount('3'), 3)
   assert.equal(normalizeTeamCount(5), 2)
 })
+
+
+for (const teamCount of [2, 3, 4]) {
+  test(`manual moves survive balancing and new signups with ${teamCount} teams`, () => {
+    for (const target of getActiveTeamKeys(teamCount)) {
+      const players = makePlayers(12)
+      players[0] = { ...players[0], team: target, manualTeam: true }
+      const balanced = balanceTeamAssignments(players, teamCount)
+      assert.equal(balanced[0].team, target)
+      const withSignup = balanceTeamAssignments([...balanced, ...makePlayers(1).map((p) => ({ ...p, id: 'new' }))], teamCount)
+      assert.equal(withSignup[0].team, target)
+      assert.equal(withSignup[0].manualTeam, true)
+    }
+  })
+}
+
+test('a manual assignment to a disabled team is released', () => {
+  const players = makePlayers(4)
+  players[0] = { ...players[0], team: 'team4', manualTeam: true }
+  const balanced = balanceTeamAssignments(players, 3)
+  assert.ok(getActiveTeamKeys(3).includes(balanced[0].team))
+  assert.equal(balanced[0].manualTeam, false)
+})

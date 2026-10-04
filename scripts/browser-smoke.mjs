@@ -185,6 +185,19 @@ try {
     'The staff dashboard did not display all four teams.',
   )
 
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.team-table')].map(t => t.dataset.teamColor)"), ['none', 'blue', 'red', 'yellow'])
+  await evaluate(`
+    const move = document.querySelector('select[aria-label^="Move "]');
+    move.value = 'team4';
+    move.dispatchEvent(new Event('change', { bubbles: true }));
+  `)
+  await waitForExpression("document.querySelector('.team-table[data-team-color=yellow]').textContent.includes('Player1')", 'Manual move did not update the draft.')
+  await evaluate("document.querySelector('.roster-actions .submit-button').click()")
+  await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.find(p => p.id === 'smoke-1').team === 'team4'", 'Manual move did not persist.')
+  await evaluate("[...document.querySelectorAll('.roster-actions button')].find(b => b.textContent.trim() === 'Rebalance teams').click()")
+  await evaluate("document.querySelector('.roster-actions .submit-button').click()")
+  await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.every(p => !p.manualTeam)", 'Rebalance did not clear manual assignments.')
+
   const fourTeamState = await evaluate(
     "JSON.parse(localStorage.getItem('bc-soccer-live-board'))",
   )

@@ -1,5 +1,6 @@
 import {
   clearStaffToken,
+  getStaffAuthorization,
   getStaffToken,
   storeStaffToken,
   verifyLocalStaffPassword,
@@ -72,6 +73,7 @@ const sanitizePlayer = (player, fallbackId) => ({
   lastName: String(player?.lastName || '').trim(),
   skill: String(player?.skill || 'beginner'),
   team: sanitizeTeam(player?.team),
+  manualTeam: player?.manualTeam === true,
   joinedAt: String(player?.joinedAt || ''),
   updatedAt: String(player?.updatedAt || ''),
   updatedBy: String(player?.updatedBy || ''),
@@ -240,12 +242,12 @@ async function readJsonResponse(response, fallbackMessage) {
 }
 
 async function apiRequest(method, path, body) {
-  const staffToken = getStaffToken()
+  const staffAuthorization = getStaffAuthorization()
   const response = await fetch(apiUrl(path), {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(staffToken ? { Authorization: `Bearer ${staffToken}` } : {}),
+      ...(staffAuthorization ? { Authorization: staffAuthorization } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })

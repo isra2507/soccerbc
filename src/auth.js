@@ -68,6 +68,10 @@ export function getStaffToken() {
   return globalThis.sessionStorage?.getItem(STAFF_SESSION_KEY) || ''
 }
 
+export function getStaffAuthorization(token = getStaffToken()) {
+  return token && !token.startsWith('local-') ? `Bearer ${token}` : ''
+}
+
 export function storeStaffToken(token) {
   globalThis.sessionStorage?.setItem(STAFF_SESSION_KEY, token)
 }

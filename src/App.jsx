@@ -55,11 +55,14 @@ const SKILL_LEVELS = [
 ]
 
 const TEAM_LABELS = {
-  penny: 'Team 1 (penny)',
-  withoutPenny: 'Team 2 (without penny)',
-  team3: 'Team 3',
-  team4: 'Team 4',
+  penny: 'Team 1 (without pinnie)',
+  withoutPenny: 'Team 2 (blue)',
+  team3: 'Team 3 (red)',
+  team4: 'Team 4 (yellow)',
 }
+const TEAM_COLORS = { penny: 'none', withoutPenny: 'blue', team3: 'red', team4: 'yellow' }
+const NONDISCRIMINATION_NOTICE = 'Bellevue College does not discriminate on the basis of race or ethnicity; creed; color; national origin; sex; marital status; sexual orientation; age; religion; genetic information; the presence of any sensory, mental, or physical disability; or veteran status in educational programs and activities which it operates. Bellevue College is prohibited from discriminating in such a manner by college policy and by state and federal law. All college personnel and persons, vendors, and organizations with whom the college does business are required to comply with applicable federal and state statutes and regulations designed to promote affirmative action and equal opportunity.'
+
 
 const GAME_HOLD_MS = 3 * 60 * 60 * 1000
 const PREVIOUS_TABLE_HOLD_MS = 7 * 24 * 60 * 60 * 1000
@@ -785,11 +788,10 @@ function PublicPage({ dataError, match, refreshState, teams }) {
     <main>
       <section className="hero-panel">
         <div className="hero-copy">
-          <p className="eyebrow">Bellevue College pickup board</p>
-          <h1>Soccer teams, saved live for everyone.</h1>
+          <h1>Bellevue College Soccer Club</h1>
           <p className="hero-text">
-            Add your name and skill level. The board automatically balances the
-            selected teams by player count and skill score before kickoff.
+            <strong>We meet every Friday at 11:00 AM on the Bellevue College soccer field.
+              Please be on time and check which team you’re on before coming onto the field.</strong>
           </p>
         </div>
         <MatchCountdown match={match} />
@@ -810,6 +812,9 @@ function PublicPage({ dataError, match, refreshState, teams }) {
       <BalanceGuide />
 
       {dataError ? <p className="system-alert">{dataError}</p> : null}
+      <footer className="college-notice" aria-label="Nondiscrimination notice" tabIndex={0}>
+        <p className="college-notice-scroll">{NONDISCRIMINATION_NOTICE}</p>
+      </footer>
     </main>
   )
 }
@@ -995,6 +1000,7 @@ function TeamTables({
           captains={captains}
           players={teams[teamKey] || []}
           teamKey={teamKey}
+          teamKeys={teamKeys}
           editable={editable}
           key={teamKey}
           onCaptainChange={onCaptainChange}
@@ -1014,6 +1020,7 @@ function TeamTable({
   onRemove,
   players,
   teamKey,
+  teamKeys,
 }) {
   const captainId = normalizeCaptains(captains)[teamKey]
   const captain = players.find((player) => player.id === captainId)
@@ -1027,7 +1034,7 @@ function TeamTable({
   }
 
   return (
-    <section className="team-table" aria-labelledby={`${teamKey}-title`}>
+    <section className="team-table" data-team-color={TEAM_COLORS[teamKey]} aria-labelledby={`${teamKey}-title`}>
       <div className="table-title">
         <div className="table-title-copy">
           <h2 id={`${teamKey}-title`}>{TEAM_LABELS[teamKey]}</h2>
@@ -1067,13 +1074,13 @@ function TeamTable({
               <th>No.</th>
               <th>Name</th>
               <th>Skill level</th>
-              {editable ? <th>Remove</th> : null}
+              {editable ? <><th>Move to team</th><th>Remove</th></> : null}
             </tr>
           </thead>
           <tbody>
             {players.length === 0 ? (
               <tr>
-                <td colSpan={editable ? 4 : 3} className="empty-cell">
+                <td colSpan={editable ? 5 : 3} className="empty-cell">
                   No players yet
                 </td>
               </tr>
@@ -1128,6 +1135,23 @@ function TeamTable({
                       getSkillLabel(player.skill)
                     )}
                   </td>
+                  {editable ? (
+                    <td data-label="Move to team">
+                      <select
+                        aria-label={`Move ${getPlayerName(player)} to team`}
+                        value=""
+                        onChange={(event) => onPlayerChange(player.id, {
+                          team: event.target.value,
+                          manualTeam: true,
+                        })}
+                      >
+                        <option value="" disabled>Move to…</option>
+                        {teamKeys.filter((key) => key !== teamKey).map((key) => (
+                          <option key={key} value={key}>{TEAM_LABELS[key]}</option>
+                        ))}
+                      </select>
+                    </td>
+                  ) : null}
                   {editable ? (
                     <td data-label="Remove">
                       <button
@@ -1448,7 +1472,9 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
   }
 
   const handleRebalanceTeams = () => {
-    setDraftPlayers((players) => balanceTeamAssignments(players, teamCount))
+    setDraftPlayers((players) => balanceTeamAssignments(
+      players.map((player) => ({ ...player, manualTeam: false })), teamCount,
+    ))
     setRosterDirty(true)
     setSaving('Draft rebalanced by skill score. Save roster changes to publish it.')
   }
@@ -1471,7 +1497,9 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
       return
     }
 
-    const balancedPlayers = balanceTeamAssignments(preparedPlayers, nextTeamCount)
+    const balancedPlayers = balanceTeamAssignments(
+      preparedPlayers.map((player) => ({ ...player, manualTeam: false })), nextTeamCount,
+    )
     setSaving(`Changing to ${nextTeamCount} teams...`)
 
     try {
