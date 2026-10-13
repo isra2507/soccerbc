@@ -1,0 +1,8 @@
+# Local stand-in for the AWS DynamoDB table. Data lives in memory and is cleared
+# when the container restarts.
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: -jar DynamoDBLocal.jar -inMemory -sharedDb
+    ports:
+      - '127.0.0.1:8000:8000'
