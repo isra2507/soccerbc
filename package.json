@@ -11,7 +11,8 @@
     "test": "node --test \"test/**/*.test.ts\" \"test/**/*.test.js\"",
     "test:browser": "node scripts/browser-smoke.mjs",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:api": "esbuild api/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-api/index.mjs --external:@aws-sdk/* --minify"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.2",
