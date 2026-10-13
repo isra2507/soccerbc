@@ -1373,7 +1373,17 @@ tr:last-child td {
 }
 
 .admin-notice {
-  width: fit-content;
+  /* Stays on screen however far down the roster you have scrolled. */
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  width: max-content;
+  max-width: min(92vw, 560px);
+  transform: translateX(-50%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  /* A message must never block the button underneath it. */
+  pointer-events: none;
 }
 
 .member-scroll-panel {
