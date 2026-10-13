@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "build:api": "esbuild api/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-api/index.mjs --external:@aws-sdk/* --minify",
-    "dev:api": "docker compose up -d --wait && node scripts/dev-api.ts"
+    "dev:api": "docker compose up -d --wait && node scripts/dev-api.ts",
+    "migrate": "node scripts/migrate-state.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.2",
