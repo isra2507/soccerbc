@@ -12,7 +12,8 @@
     "test:browser": "node scripts/browser-smoke.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "build:api": "esbuild api/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-api/index.mjs --external:@aws-sdk/* --minify"
+    "build:api": "esbuild api/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-api/index.mjs --external:@aws-sdk/* --minify",
+    "dev:api": "docker compose up -d --wait && node scripts/dev-api.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.2",
