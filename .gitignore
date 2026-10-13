@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+dist-api
+
+test-results
+playwright-report
+
+.aws-sam
