@@ -1,0 +1,159 @@
+name: CI
+
+# Only the checks a change can affect run. Which parts a change touches is decided by
+# scripts/changed-areas.ts (tested in test/changed-areas.test.ts), so the path rules live
+# in one place. Docs-only changes run nothing. Branch protection should require the single
+# "CI result" job: skipped jobs count as passing there, and any failure fails it.
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.areas.outputs.api }}
+      web: ${{ steps.areas.outputs.web }}
+      infra: ${{ steps.areas.outputs.infra }}
+      tests: ${{ steps.areas.outputs.tests }}
+      ci: ${{ steps.areas.outputs.ci }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Work out what changed
+        id: areas
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/changed-areas.ts "$BASE" "$HEAD" | tee -a "$GITHUB_OUTPUT"
+
+  checks:
+    name: Type check, lint, unit and API tests
+    needs: changes
+    if: >-
+      needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true' ||
+      needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8000:8000
+    env:
+      # Fail instead of silently skipping the DynamoDB integration tests.
+      REQUIRE_DYNAMODB: '1'
+      DYNAMODB_ENDPOINT: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  build-web:
+    name: Build site
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  build-api:
+    name: Build API bundle
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:api
+
+  e2e:
+    name: End-to-end tests
+    # They drive the real site against the real API, so a change to either can break them.
+    needs: changes
+    if: >-
+      needs.changes.outputs.api == 'true' || needs.changes.outputs.web == 'true' ||
+      needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8000:8000
+    env:
+      DYNAMODB_ENDPOINT: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Keep the Playwright report if tests failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  infra:
+    name: Validate infrastructure template
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate and lint template.yml
+        run: sam validate --lint --template-file template.yml --region us-east-1
+
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [changes, checks, build-web, build-api, e2e, infra]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if anything that ran did not succeed
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            exit 1
+          fi

@@ -1,14 +1,32 @@
-name: Deploy website
+name: Deploy
+
+# Only what changed is deployed:
+#   api/**, shared/** or dependencies  -> the Lambda
+#   src/**, public/**, index.html, ...  -> the static site (S3 + CloudFront)
+# (the rules are in scripts/changed-areas.ts). When a push changes both, the API goes
+# first and the site only after it succeeded, so a new site never meets an old API.
+# Run it by hand to deploy one side or both regardless of what changed.
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      target:
+        description: What to deploy
+        type: choice
+        options: [both, api, web]
+        default: both
 
 permissions:
   id-token: write
   contents: read
+
+# Never run two deploys at once, and never cancel one half way through.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-1
@@ -16,11 +34,129 @@ env:
   CLOUDFRONT_DISTRIBUTION_ID: E2ROO7A769UCO2
   LAMBDA_FUNCTION_NAME: bcsoccerclub-api
   DYNAMODB_TABLE_NAME: bcsoccerclub-state
+  ALLOWED_ORIGINS: https://www.bcsoccerclub.com,https://bcsoccerclub.com,https://d35vcc3an9jffn.cloudfront.net,http://localhost:5173
   VITE_API_BASE_URL: https://6oumqshk75.execute-api.us-east-1.amazonaws.com
 
 jobs:
-  deploy:
+  changes:
+    name: Detect changes
     if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.areas.outputs.api }}
+      web: ${{ steps.areas.outputs.web }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Work out what to deploy
+        id: areas
+        env:
+          EVENT: ${{ github.event_name }}
+          TARGET: ${{ inputs.target }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$TARGET" in
+              api) printf 'api=true\nweb=false\n' ;;
+              web) printf 'api=false\nweb=true\n' ;;
+              *)   printf 'api=true\nweb=true\n' ;;
+            esac | tee -a "$GITHUB_OUTPUT"
+          else
+            node scripts/changed-areas.ts "$BEFORE" "$SHA" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+  deploy-api:
+    name: Deploy API
+    needs: changes
+    if: ${{ needs.changes.outputs.api == 'true' }}
+    runs-on: ubuntu-latest
+
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8000:8000
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check, test and lint
+        env:
+          REQUIRE_DYNAMODB: '1'
+          DYNAMODB_ENDPOINT: http://localhost:8000
+        run: |
+          npm run typecheck
+          npm test
+          npm run lint
+
+      - name: Confirm staff authentication secrets
+        env:
+          STAFF_PASSWORD_HASH: ${{ secrets.STAFF_PASSWORD_HASH }}
+          STAFF_AUTH_SECRET: ${{ secrets.STAFF_AUTH_SECRET }}
+        run: |
+          test -n "$STAFF_PASSWORD_HASH"
+          test -n "$STAFF_AUTH_SECRET"
+
+      - name: Build API bundle
+        run: npm run build:api
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy roster API
+        env:
+          STAFF_PASSWORD_HASH: ${{ secrets.STAFF_PASSWORD_HASH }}
+          STAFF_AUTH_SECRET: ${{ secrets.STAFF_AUTH_SECRET }}
+        run: |
+          (cd dist-api && zip ../lambda.zip index.mjs)
+          jq -n \
+            --arg table "$DYNAMODB_TABLE_NAME" \
+            --arg passwordHash "$STAFF_PASSWORD_HASH" \
+            --arg authSecret "$STAFF_AUTH_SECRET" \
+            --arg origins "$ALLOWED_ORIGINS" \
+            '{Variables:{TABLE_NAME:$table,STAFF_PASSWORD_HASH:$passwordHash,STAFF_AUTH_SECRET:$authSecret,ALLOWED_ORIGINS:$origins}}' \
+            > lambda-environment.json
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --zip-file fileb://lambda.zip
+          aws lambda wait function-updated \
+            --function-name "$LAMBDA_FUNCTION_NAME"
+          aws lambda update-function-configuration \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --environment file://lambda-environment.json
+          aws lambda wait function-updated \
+            --function-name "$LAMBDA_FUNCTION_NAME"
+
+  deploy-web:
+    name: Deploy site
+    needs: [changes, deploy-api]
+    # `always()` lets this run when deploy-api was skipped (nothing changed there), but
+    # never when it failed or was cancelled.
+    if: >-
+      ${{ always() && needs.changes.outputs.web == 'true' &&
+      (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -36,18 +172,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test and lint
+      - name: Type check and lint
         run: |
-          npm test
+          npm run typecheck
           npm run lint
-
-      - name: Confirm staff authentication secrets
-        env:
-          STAFF_PASSWORD_HASH: ${{ secrets.STAFF_PASSWORD_HASH }}
-          STAFF_AUTH_SECRET: ${{ secrets.STAFF_AUTH_SECRET }}
-        run: |
-          test -n "$STAFF_PASSWORD_HASH"
-          test -n "$STAFF_AUTH_SECRET"
 
       - name: Build site
         run: npm run build
@@ -57,32 +185,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Deploy roster API
-        continue-on-error: true
-        env:
-          STAFF_PASSWORD_HASH: ${{ secrets.STAFF_PASSWORD_HASH }}
-          STAFF_AUTH_SECRET: ${{ secrets.STAFF_AUTH_SECRET }}
-        run: |
-          mkdir lambda-package
-          cp lambda/bcsoccerclub-api.mjs lambda-package/index.mjs
-          (cd lambda-package && zip ../lambda.zip index.mjs)
-          jq -n \
-            --arg table "$DYNAMODB_TABLE_NAME" \
-            --arg passwordHash "$STAFF_PASSWORD_HASH" \
-            --arg authSecret "$STAFF_AUTH_SECRET" \
-            '{Variables:{TABLE_NAME:$table,STAFF_PASSWORD_HASH:$passwordHash,STAFF_AUTH_SECRET:$authSecret}}' \
-            > lambda-environment.json
-          aws lambda update-function-code \
-            --function-name "$LAMBDA_FUNCTION_NAME" \
-            --zip-file fileb://lambda.zip
-          aws lambda wait function-updated \
-            --function-name "$LAMBDA_FUNCTION_NAME"
-          aws lambda update-function-configuration \
-            --function-name "$LAMBDA_FUNCTION_NAME" \
-            --environment file://lambda-environment.json
-          aws lambda wait function-updated \
-            --function-name "$LAMBDA_FUNCTION_NAME"
 
       - name: Upload dist to S3
         run: aws s3 sync dist/ s3://${{ env.S3_BUCKET }} --delete
