@@ -593,7 +593,7 @@ function Header({ dataStatus, menuOpen, onMenuEnter, onMenuLeave, onMenuToggle }
         href="#/"
         aria-label={`Bellevue College soccer board. ${dataStatus}`}
       >
-        <img src="/bc-logo.png" alt="Bellevue College" />
+        <img src="/bc-logo.webp" alt="Bellevue College" />
       </a>
 
       <button

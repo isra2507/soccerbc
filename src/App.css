@@ -25,7 +25,7 @@
       rgba(187, 247, 208, 0.12) 72px,
       rgba(187, 247, 208, 0.12) 144px
     ),
-    url('/main_wallpaper.png') center top / cover no-repeat;
+    url('/main_wallpaper.webp') center top / cover no-repeat;
   scroll-behavior: smooth;
   transition:
     background 240ms ease,
@@ -66,7 +66,7 @@
       rgba(168, 85, 247, 0.12) 72px,
       rgba(168, 85, 247, 0.12) 144px
     ),
-    url('/main_wallpaper.png') center top / cover no-repeat;
+    url('/main_wallpaper.webp') center top / cover no-repeat;
 }
 
 .dark-mode.member-shell {
@@ -280,7 +280,7 @@
 .side-menu.public-menu {
   background:
     linear-gradient(rgba(240, 249, 255, 0.82), rgba(240, 253, 250, 0.9)),
-    url('/main_wallpaper.png') center 18% / cover no-repeat;
+    url('/main_wallpaper.webp') center 18% / cover no-repeat;
 }
 
 .side-menu.member-menu {
@@ -297,7 +297,7 @@
   border-left-color: rgba(216, 180, 254, 0.22);
   background:
     linear-gradient(rgba(15, 23, 42, 0.72), rgba(76, 29, 149, 0.76)),
-    url('/main_wallpaper.png') center 18% / cover no-repeat;
+    url('/main_wallpaper.webp') center 18% / cover no-repeat;
 }
 
 .dark-mode .side-menu.member-menu {
@@ -534,7 +534,7 @@ main {
       rgba(3, 38, 67, 0.72) 52%,
       rgba(3, 38, 67, 0.25) 100%
     ),
-    url('/main_wallpaper.png') center 20% / cover no-repeat;
+    url('/main_wallpaper.webp') center 20% / cover no-repeat;
   box-shadow: 0 24px 70px rgba(8, 47, 73, 0.22);
 }
 
@@ -547,7 +547,7 @@ main {
       rgba(12, 22, 54, 0.82) 54%,
       rgba(88, 28, 135, 0.42) 100%
     ),
-    url('/main_wallpaper.png') center 20% / cover no-repeat;
+    url('/main_wallpaper.webp') center 20% / cover no-repeat;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
 }
 
@@ -1668,7 +1668,7 @@ tr:last-child td {
     padding: 34px;
     background:
       linear-gradient(rgba(3, 38, 67, 0.78), rgba(3, 38, 67, 0.78)),
-      url('/main_wallpaper.png') center top / cover no-repeat;
+      url('/main_wallpaper.webp') center top / cover no-repeat;
   }
 
   .about-hero {
