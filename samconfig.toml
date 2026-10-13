@@ -1,0 +1,9 @@
+version = 0.1
+
+# Region is deliberately not set here: pass --region or set AWS_REGION, so choosing
+# where the stack lives is an explicit decision rather than a hidden default.
+[default.deploy.parameters]
+stack_name = "bcsoccerclub"
+resolve_s3 = true
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true

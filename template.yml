@@ -1,0 +1,449 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BC Soccer Club - static site (S3 + CloudFront), API (HTTP API + Lambda) and storage (DynamoDB).
+
+# Deploy:
+#   npm run build && npm run build:api
+#   sam deploy --parameter-overrides StaffPasswordHash=... StaffAuthSecret=... OriginVerifySecret=... [CertificateArn=... HostedZoneId=...]
+#   aws s3 sync dist/ s3://<SiteBucketName> --delete
+#   aws cloudfront create-invalidation --distribution-id <DistributionId> --paths "/*"
+#
+# The site is built with VITE_API_BASE_URL=/api, so the browser only ever talks to
+# one origin (CloudFront) and CORS is not involved in production.
+
+Parameters:
+  StaffPasswordHash:
+    Type: String
+    NoEcho: true
+    Description: "pbkdf2-sha256$iterations$saltBase64$hashBase64 (run: npm run hash-password)"
+  StaffAuthSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: At least 32 random bytes, for example `openssl rand -base64 48`. Signs staff tokens.
+  OriginVerifySecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: >-
+      Random value CloudFront adds to every API request (header x-origin-verify). The API refuses
+      requests without it, so nobody can call the API address directly and skip CloudFront.
+      Generate with `openssl rand -base64 48`.
+  WebsiteDomain:
+    Type: String
+    Default: www.bcsoccerclub.com
+    Description: Main domain name of the site.
+  ApexDomain:
+    Type: String
+    Default: bcsoccerclub.com
+    Description: Second domain name served by the same site. Leave empty to skip it.
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: ACM certificate ARN covering the domain names. Must be in us-east-1 (CloudFront requirement). Leave empty to use the *.cloudfront.net address only.
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Route 53 hosted zone for the domain names. Leave empty if DNS is managed elsewhere.
+  ExtraAllowedOrigins:
+    Type: String
+    Default: http://localhost:5173
+    Description: Extra browser origins allowed by the API's CORS (only needed for local development against this stack).
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Email address for alarm notifications. Leave empty to create the alarms without a subscriber.
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+  HasApexDomain: !And
+    - !Condition HasCertificate
+    - !Not [!Equals [!Ref ApexDomain, '']]
+  HasHostedZone: !And
+    - !Condition HasCertificate
+    - !Not [!Equals [!Ref HostedZoneId, '']]
+  HasApexRecord: !And
+    - !Condition HasHostedZone
+    - !Condition HasApexDomain
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
+
+Resources:
+  # ---------------------------------------------------------------- storage
+
+  Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      # Rate-limit counters expire on their own (see api/rateLimit.ts).
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # -------------------------------------------------------------------- API
+
+  ApiFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-api
+      RetentionInDays: !Ref LogRetentionDays
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ApiFunctionLogs
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-api
+      Description: BC Soccer Club API (one function; routing happens in api/handler.ts)
+      # Output of `npm run build:api` (esbuild bundle: dist-api/index.mjs).
+      CodeUri: dist-api/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Architectures: [arm64]
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref Table
+          STAFF_PASSWORD_HASH: !Ref StaffPasswordHash
+          STAFF_AUTH_SECRET: !Ref StaffAuthSecret
+          # Only CloudFront may call the API, and the visitor's address comes from its forwarded-for header.
+          ORIGIN_VERIFY_SECRET: !Ref OriginVerifySecret
+          BEHIND_CLOUDFRONT: 'true'
+          ALLOWED_ORIGINS: !If
+            - HasCertificate
+            - !Sub
+              - 'https://${WebsiteDomain},${ApexOrigin}${ExtraAllowedOrigins}'
+              - ApexOrigin: !If [HasApexDomain, !Sub 'https://${ApexDomain},', '']
+            - !Ref ExtraAllowedOrigins
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            # Transactions need only the permissions of the writes they contain.
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt Table.Arn
+      Events:
+        Any:
+          # No path or method: becomes the $default route, so every request reaches the function.
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Per-route limits protect the Lambda and the bill from a flood of requests.
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 25
+      # CORS is answered by the Lambda (api/http.ts), so none is configured here: the
+      # gateway's own CORS settings would override the Lambda's headers.
+
+  # ------------------------------------------------------------------- site
+
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  SiteAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-site
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # The API sits under /api on the site's own domain; the Lambda's routes start at /.
+  StripApiPrefix:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub ${AWS::StackName}-strip-api-prefix
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Rewrites /api/state to /state before it reaches the API
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          request.uri = request.uri.replace(/^\/api(?=\/|$)/, '') || '/';
+          return request;
+        }
+
+  # Security headers for the site. The Content-Security-Policy was tested against the real
+  # production build with no violations (all pages, staff login and an action): the site loads
+  # nothing from outside its own domain, and uses inline styles only as CSS variables
+  # (hence style-src-attr). `connect-src 'self'` works because the API is served at /api.
+  SiteHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub ${AWS::StackName}-site-headers
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: >-
+              default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline';
+              img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self';
+              form-action 'self'; frame-ancestors 'none'
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: false
+            Preload: false
+            Override: true
+        CustomHeadersConfig:
+          Items:
+            - Header: permissions-policy
+              Value: camera=(), microphone=(), geolocation=(), payment=()
+              Override: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub ${AWS::StackName} site and API
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        DefaultRootObject: index.html
+        Aliases: !If
+          - HasCertificate
+          - !If
+            - HasApexDomain
+            - [!Ref WebsiteDomain, !Ref ApexDomain]
+            - [!Ref WebsiteDomain]
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasCertificate
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+          - Id: api
+            DomainName: !Sub ${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+            OriginCustomHeaders:
+              - HeaderName: x-origin-verify
+                HeaderValue: !Ref OriginVerifySecret
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          # Managed CachingOptimized, plus our own security headers (see SiteHeaders).
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SiteHeaders
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            Compress: true
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            # Managed: CachingDisabled, and forward every viewer header except Host
+            # (the staff Authorization header must reach the Lambda).
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !GetAtt StripApiPrefix.FunctionMetadata.FunctionARN
+        # Deliberately no custom error responses. The usual "send 403/404 to
+        # index.html" rule would also rewrite the API's own 404s (for example
+        # "Player not found") into HTML. The site uses hash routes (/#/staff), so
+        # every page is the one index.html anyway.
+
+  DnsWebsite:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref WebsiteDomain
+      Type: A
+      AliasTarget:
+        # Fixed zone id for every CloudFront distribution.
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !GetAtt Distribution.DomainName
+
+  DnsWebsiteIpv6:
+    Type: AWS::Route53::RecordSet
+    Condition: HasHostedZone
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref WebsiteDomain
+      Type: AAAA
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !GetAtt Distribution.DomainName
+
+  DnsApex:
+    Type: AWS::Route53::RecordSet
+    Condition: HasApexRecord
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ApexDomain
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !GetAtt Distribution.DomainName
+
+  DnsApexIpv6:
+    Type: AWS::Route53::RecordSet
+    Condition: HasApexRecord
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ApexDomain
+      Type: AAAA
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !GetAtt Distribution.DomainName
+
+  # ------------------------------------------------------------- monitoring
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+
+  AlertSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  FunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The API function threw an error (a 500 reached a visitor).
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopic]
+
+  FunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Requests were throttled; either a traffic spike or abuse.
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopic]
+
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The API gateway returned server errors.
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref HttpApi
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopic]
+
+Outputs:
+  SiteUrl:
+    Description: Where the site is served (the custom domain once DNS points at CloudFront).
+    Value: !If
+      - HasCertificate
+      - !Sub https://${WebsiteDomain}
+      - !Sub https://${Distribution.DomainName}
+  DistributionDomain:
+    Description: Point DNS here (CNAME or alias) if the domain is managed outside Route 53.
+    Value: !GetAtt Distribution.DomainName
+  DistributionId:
+    Value: !Ref Distribution
+  SiteBucketName:
+    Description: Upload the built site here (aws s3 sync dist/ s3://...).
+    Value: !Ref SiteBucket
+  ApiEndpoint:
+    Description: Direct API address. It answers 403 on purpose; the site and everything else use /api on the site's own domain.
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  TableName:
+    Value: !Ref Table
+  FunctionName:
+    Value: !Ref ApiFunction

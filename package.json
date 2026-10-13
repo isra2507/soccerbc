@@ -10,11 +10,12 @@
     "lint": "oxlint",
     "test": "node --test \"test/**/*.test.ts\" \"test/**/*.test.js\"",
     "preview": "vite preview",
+    "dev:api": "docker compose up -d --wait && node scripts/dev-api.ts",
     "typecheck": "tsc --noEmit",
     "build:api": "esbuild api/lambda.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist-api/index.mjs --external:@aws-sdk/* --minify",
-    "dev:api": "docker compose up -d --wait && node scripts/dev-api.ts",
     "migrate": "node scripts/migrate-state.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "validate:infra": "sam validate --lint --template-file template.yml --region us-east-1"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.2",
