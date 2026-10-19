@@ -1698,13 +1698,26 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
           event.preventDefault()
           saveAnnouncement(announcement)
         }}>
-          <h2>Announcement</h2>
-          <p>Share a message for {formatMatchDate(rosterState.match?.nextMatchAt)}. It appears at the top of the public board and expires with the team tables, three hours after kickoff.</p>
-          <label htmlFor="match-announcement">Announcement for this soccer date</label>
-          <textarea id="match-announcement" rows={3} maxLength={1000} value={announcement}
+          <header className="stats-editor-header">
+            <div><p className="stats-eyebrow">Club updates</p><h2>Announcement</h2>
+              <p>Share an update at the top of the public board.</p></div>
+            <span className="stats-visibility-badge">
+              {announcement !== (rosterState.match?.announcement || '') ? 'Unsaved changes' : getActiveAnnouncement(rosterState.match) ? 'Published' : 'Not published'}
+            </span>
+          </header>
+          <label htmlFor="match-announcement">Message for players</label>
+          <textarea id="match-announcement" rows={4} maxLength={1000} value={announcement}
+            placeholder="For example: Bring water and arrive 10 minutes before kickoff."
+            aria-describedby="announcement-help" disabled={announcementSaving}
             onChange={(event) => setAnnouncement(event.target.value)} />
-          <div className="roster-actions">
-            <button className="submit-button" type="submit" disabled={announcementSaving || !rosterState.match?.nextMatchAt || !announcement.trim()}>Save announcement</button>
+          <div className="announcement-meta">
+            <span id="announcement-help">{rosterState.match?.nextMatchAt
+              ? `For ${formatMatchDate(rosterState.match.nextMatchAt)}. Expires 3 hours after kickoff.`
+              : 'Set the next soccer date above to publish an announcement.'}</span>
+            <span>{announcement.length}/1,000</span>
+          </div>
+          <div className="announcement-actions">
+            <button className="submit-button" type="submit" disabled={announcementSaving || !rosterState.match?.nextMatchAt || !announcement.trim()}>{announcementSaving ? 'Saving...' : 'Save announcement'}</button>
             <button className="back-button" type="button" disabled={announcementSaving || !rosterState.match?.announcement}
               onClick={() => saveAnnouncement('')}>Remove announcement</button>
           </div>

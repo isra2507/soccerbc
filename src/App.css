@@ -1951,9 +1951,6 @@ tr:last-child td {
 .discord-invite img { display: block; border: 8px solid white; background: white; }
 .club-contact { line-height: 1.6; overflow-wrap: anywhere; }
 .hero-copy .club-contact a { color: inherit; font-weight: 700; text-decoration: underline; }
-.announcement-editor { display: grid; gap: 12px; padding: 20px; border-radius: 8px; background: rgba(255,255,255,.85); color: #082f49; }
-.announcement-editor p { margin: 0; line-height: 1.5; }
-.announcement-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 12px; border: 1px solid #64748b; border-radius: 6px; font: inherit; }
 .game-notice {
   overflow: hidden;
   margin-bottom: 20px;
@@ -1977,7 +1974,7 @@ tr:last-child td {
 @media (prefers-reduced-motion: reduce) { .game-notice-scroll { width: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 16px; animation: none; } }
 
 /* Keep match statistics legible independently of the member page wallpaper. */
-.app-shell .statistics-editor,
+.app-shell :is(.statistics-editor, .announcement-editor),
 .app-shell .match-statistics {
   --stats-surface: #ffffff;
   --stats-inset: #f1f5f9;
@@ -1987,7 +1984,7 @@ tr:last-child td {
   --stats-accent: #075b88;
   color: var(--stats-text);
 }
-.app-shell.dark-mode .statistics-editor,
+.app-shell.dark-mode :is(.statistics-editor, .announcement-editor),
 .app-shell.dark-mode .match-statistics {
   --stats-surface: #122334;
   --stats-inset: #0b1928;
@@ -1996,7 +1993,7 @@ tr:last-child td {
   --stats-border: #3b5268;
   --stats-accent: #8bd8ff;
 }
-.app-shell .statistics-editor {
+.app-shell :is(.statistics-editor, .announcement-editor) {
   margin: 28px 0 0;
   padding: clamp(16px, 3vw, 28px);
   border: 1px solid var(--stats-border);
@@ -2005,37 +2002,37 @@ tr:last-child td {
   box-shadow: 0 8px 24px #00000012;
 }
 .stats-editor-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 24px; }
-.app-shell .statistics-editor h2 { margin: 4px 0 8px; font-size: clamp(1.2rem, 2vw, 1.6rem); color: var(--stats-text); }
-.app-shell .statistics-editor p { margin: 0; color: var(--stats-muted); font-size: .9rem; line-height: 1.6; }
-.app-shell .statistics-editor .stats-eyebrow { color: var(--stats-accent); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+.app-shell :is(.statistics-editor, .announcement-editor) h2 { margin: 4px 0 8px; font-size: clamp(1.2rem, 2vw, 1.6rem); color: var(--stats-text); }
+.app-shell :is(.statistics-editor, .announcement-editor) p { margin: 0; color: var(--stats-muted); font-size: .9rem; line-height: 1.6; }
+.app-shell :is(.statistics-editor, .announcement-editor) .stats-eyebrow { color: var(--stats-accent); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
 .stats-visibility-badge { padding: 6px 12px; border-radius: 20px; background: var(--stats-inset); color: var(--stats-accent); font-size: .78rem; font-weight: 650; white-space: nowrap; }
 .stats-editor-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(250px, 1fr); gap: 24px; }
-.app-shell .statistics-editor fieldset { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--stats-border); border-radius: 12px; }
-.app-shell .statistics-editor legend { padding: 0 8px; color: var(--stats-text); font-size: .95rem; font-weight: 650; }
+.app-shell :is(.statistics-editor, .announcement-editor) fieldset { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--stats-border); border-radius: 12px; }
+.app-shell :is(.statistics-editor, .announcement-editor) legend { padding: 0 8px; color: var(--stats-text); font-size: .95rem; font-weight: 650; }
 .stats-table-scroll { overflow-x: auto; }
 .app-shell .stats-table-scroll table { width: 100%; min-width: 0; border-collapse: collapse; table-layout: auto; }
 .app-shell .stats-table-scroll th,
 .app-shell .stats-table-scroll td { padding: 10px 8px; border-bottom: 1px solid var(--stats-border); text-align: left; color: var(--stats-text); font-size: .9rem; font-weight: 450; }
 .app-shell .stats-table-scroll th { background: var(--stats-inset); color: var(--stats-muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.app-shell .statistics-editor input:not([type=checkbox]) { width: 100%; min-width: 58px; height: 42px; padding: 8px 10px; border: 1px solid var(--stats-border); border-radius: 7px; background: var(--stats-inset); color: var(--stats-text); font: inherit; font-size: .95rem; box-shadow: none; }
-.app-shell .statistics-editor input::placeholder { color: var(--stats-muted); }
-.app-shell .statistics-editor input[type=number] { max-width: 84px; text-align: center; font-variant-numeric: tabular-nums; }
-.app-shell .statistics-editor label { color: var(--stats-text); font-size: .88rem; font-weight: 550; }
-.app-shell .statistics-editor .stats-checkbox { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.app-shell .statistics-editor input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; accent-color: #087db8; }
+.app-shell :is(.statistics-editor, .announcement-editor) input:not([type=checkbox]) { width: 100%; min-width: 58px; height: 42px; padding: 8px 10px; border: 1px solid var(--stats-border); border-radius: 7px; background: var(--stats-inset); color: var(--stats-text); font: inherit; font-size: .95rem; box-shadow: none; }
+.app-shell :is(.statistics-editor, .announcement-editor) input::placeholder { color: var(--stats-muted); }
+.app-shell :is(.statistics-editor, .announcement-editor) input[type=number] { max-width: 84px; text-align: center; font-variant-numeric: tabular-nums; }
+.app-shell :is(.statistics-editor, .announcement-editor) label { color: var(--stats-text); font-size: .88rem; font-weight: 550; }
+.app-shell :is(.statistics-editor, .announcement-editor) .stats-checkbox { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.app-shell :is(.statistics-editor, .announcement-editor) input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; accent-color: #087db8; }
 .stats-score-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
 .stats-score-inputs label { display: grid; gap: 8px; }
-.app-shell .statistics-editor .stats-score-inputs input { max-width: none; height: 56px; font-size: 1.5rem; font-weight: 650; }
+.app-shell :is(.statistics-editor, .announcement-editor) .stats-score-inputs input { max-width: none; height: 56px; font-size: 1.5rem; font-weight: 650; }
 .stats-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stats-border); }
-.app-shell .statistics-editor .stats-visibility-help { margin-top: 6px; max-width: 55ch; font-size: .8rem; }
-.app-shell .statistics-editor .back-button,
-.app-shell .statistics-editor .submit-button { min-height: 40px; padding: 9px 14px; border: 1px solid var(--stats-border); border-radius: 8px; background: var(--stats-inset); color: var(--stats-text); font-size: .85rem; font-weight: 650; box-shadow: none; backdrop-filter: none; transform: none; }
-.app-shell .statistics-editor fieldset > .back-button { margin-top: 14px; color: var(--stats-accent); }
-.app-shell .statistics-editor .submit-button { background: #0875ad; border-color: #0875ad; color: #fff; white-space: nowrap; }
-.app-shell .statistics-editor button:hover:not(:disabled) { filter: brightness(1.12); }
-.app-shell .statistics-editor button:disabled { opacity: .5; cursor: default; }
-.app-shell .statistics-editor :is(input, button, summary):focus-visible { outline: 3px solid #38bdf8; outline-offset: 3px; }
-.app-shell .statistics-editor .stats-empty { color: var(--stats-muted); padding: 24px 8px; line-height: 1.6; }
+.app-shell :is(.statistics-editor, .announcement-editor) .stats-visibility-help { margin-top: 6px; max-width: 55ch; font-size: .8rem; }
+.app-shell :is(.statistics-editor, .announcement-editor) .back-button,
+.app-shell :is(.statistics-editor, .announcement-editor) .submit-button { min-height: 40px; padding: 9px 14px; border: 1px solid var(--stats-border); border-radius: 8px; background: var(--stats-inset); color: var(--stats-text); font-size: .85rem; font-weight: 650; box-shadow: none; backdrop-filter: none; transform: none; }
+.app-shell :is(.statistics-editor, .announcement-editor) fieldset > .back-button { margin-top: 14px; color: var(--stats-accent); }
+.app-shell :is(.statistics-editor, .announcement-editor) .submit-button { background: #0875ad; border-color: #0875ad; color: #fff; white-space: nowrap; }
+.app-shell :is(.statistics-editor, .announcement-editor) button:hover:not(:disabled) { filter: brightness(1.12); }
+.app-shell :is(.statistics-editor, .announcement-editor) button:disabled { opacity: .5; cursor: default; }
+.app-shell :is(.statistics-editor, .announcement-editor) :is(input, button, summary):focus-visible { outline: 3px solid #38bdf8; outline-offset: 3px; }
+.app-shell :is(.statistics-editor, .announcement-editor) .stats-empty { color: var(--stats-muted); padding: 24px 8px; line-height: 1.6; }
 .stats-preview { margin-top: 22px; border-top: 1px solid var(--stats-border); padding-top: 16px; }
 .stats-preview summary { cursor: pointer; color: var(--stats-accent); font-size: .88rem; font-weight: 600; }
 .app-shell .match-statistics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 24px 0; }
@@ -2055,6 +2052,23 @@ tr:last-child td {
   .app-shell .stats-table-scroll tr { display: table-row; }
   .app-shell .stats-table-scroll :is(th, td) { display: table-cell; width: auto; padding: 10px 6px; }
   .app-shell .stats-table-scroll td::before { display: none; }
-  .app-shell .statistics-editor fieldset { padding: 12px; }
-  .app-shell .statistics-editor .stats-table-scroll table { min-width: 420px; }
+  .app-shell :is(.statistics-editor, .announcement-editor) fieldset { padding: 12px; }
+  .app-shell :is(.statistics-editor, .announcement-editor) .stats-table-scroll table { min-width: 420px; }
+}
+
+.app-shell .announcement-editor { margin: 0 0 24px; display: grid; gap: 12px; }
+.app-shell .announcement-editor .stats-editor-header { margin-bottom: 4px; }
+.app-shell .announcement-editor textarea {
+  width: 100%; min-height: 128px; padding: 14px; resize: vertical;
+  border: 1px solid var(--stats-border); border-radius: 8px;
+  background: var(--stats-inset); color: var(--stats-text);
+  font: inherit; font-size: .95rem; line-height: 1.6;
+}
+.app-shell .announcement-editor textarea::placeholder { color: var(--stats-muted); }
+.app-shell .announcement-editor textarea:focus-visible { outline: 3px solid #38bdf8; outline-offset: 3px; }
+.app-shell .announcement-editor .announcement-meta { display: flex; justify-content: space-between; gap: 16px; font-size: .8rem; color: var(--stats-muted); }
+.app-shell .announcement-editor .announcement-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 16px; margin-top: 4px; border-top: 1px solid var(--stats-border); }
+@media (max-width: 640px) {
+  .announcement-actions button { flex: 1 1 100%; }
+  .app-shell .announcement-editor .announcement-meta { flex-wrap: wrap; gap: 4px 16px; }
 }
