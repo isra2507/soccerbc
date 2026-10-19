@@ -1694,8 +1694,6 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
       <section className="member-scroll-panel">
         {saving ? <p className="form-notice admin-notice">{saving}</p> : null}
 
-        <MatchStatsEditor match={rosterState.match} staffName={staffName} refreshState={refreshState} />
-
         <form className="announcement-editor" onSubmit={(event) => {
           event.preventDefault()
           saveAnnouncement(announcement)
@@ -1758,6 +1756,8 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
           onPlayerChange={handlePlayerChange}
           onRemove={handleRemove}
         />
+
+        <MatchStatsEditor match={rosterState.match} staffName={staffName} refreshState={refreshState} />
       </section>
     </main>
   )

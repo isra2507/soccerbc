@@ -1976,21 +1976,85 @@ tr:last-child td {
 @media (max-width: 600px) { .discord-invite { flex-direction: column; align-items: flex-start; } }
 @media (prefers-reduced-motion: reduce) { .game-notice-scroll { width: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 16px; animation: none; } }
 
-.match-statistics, .statistics-editor {
-  margin: 1.5rem 0;
-  padding: 1.25rem;
-  border: 1px solid #89a5b8;
-  border-radius: 16px;
-  background: var(--panel-bg, #f5f9fc);
-  color: #132f44;
+/* Keep match statistics legible independently of the member page wallpaper. */
+.app-shell .statistics-editor,
+.app-shell .match-statistics {
+  --stats-surface: #ffffff;
+  --stats-inset: #f1f5f9;
+  --stats-text: #163047;
+  --stats-muted: #526579;
+  --stats-border: #cad6e2;
+  --stats-accent: #075b88;
+  color: var(--stats-text);
 }
-.match-statistics { display: grid; gap: 1.25rem; }
+.app-shell.dark-mode .statistics-editor,
+.app-shell.dark-mode .match-statistics {
+  --stats-surface: #122334;
+  --stats-inset: #0b1928;
+  --stats-text: #edf5fc;
+  --stats-muted: #b4c6d7;
+  --stats-border: #3b5268;
+  --stats-accent: #8bd8ff;
+}
+.app-shell .statistics-editor {
+  margin: 28px 0 0;
+  padding: clamp(16px, 3vw, 28px);
+  border: 1px solid var(--stats-border);
+  border-radius: 18px;
+  background: var(--stats-surface);
+  box-shadow: 0 8px 24px #00000012;
+}
+.stats-editor-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 24px; }
+.app-shell .statistics-editor h2 { margin: 4px 0 8px; font-size: clamp(1.2rem, 2vw, 1.6rem); color: var(--stats-text); }
+.app-shell .statistics-editor p { margin: 0; color: var(--stats-muted); font-size: .9rem; line-height: 1.6; }
+.app-shell .statistics-editor .stats-eyebrow { color: var(--stats-accent); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+.stats-visibility-badge { padding: 6px 12px; border-radius: 20px; background: var(--stats-inset); color: var(--stats-accent); font-size: .78rem; font-weight: 650; white-space: nowrap; }
+.stats-editor-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(250px, 1fr); gap: 24px; }
+.app-shell .statistics-editor fieldset { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--stats-border); border-radius: 12px; }
+.app-shell .statistics-editor legend { padding: 0 8px; color: var(--stats-text); font-size: .95rem; font-weight: 650; }
 .stats-table-scroll { overflow-x: auto; }
-.match-statistics table, .statistics-editor table { width: 100%; border-collapse: collapse; }
-.match-statistics th, .match-statistics td, .statistics-editor th, .statistics-editor td { padding: .65rem; text-align: left; border-bottom: 1px solid #abc0cd; }
-.statistics-editor fieldset { min-width: 0; margin: 1rem 0; border: 1px solid #89a5b8; border-radius: 8px; }
-.statistics-editor input:not([type=checkbox]) { box-sizing: border-box; width: 100%; min-width: 75px; padding: .6rem; }
-.statistics-editor input[type=checkbox] { width: auto; margin-right: .6rem; }
-.stats-checkbox { display: flex; align-items: center; gap: .4rem; }
-.stats-score-inputs { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
+.app-shell .stats-table-scroll table { width: 100%; min-width: 0; border-collapse: collapse; table-layout: auto; }
+.app-shell .stats-table-scroll th,
+.app-shell .stats-table-scroll td { padding: 10px 8px; border-bottom: 1px solid var(--stats-border); text-align: left; color: var(--stats-text); font-size: .9rem; font-weight: 450; }
+.app-shell .stats-table-scroll th { background: var(--stats-inset); color: var(--stats-muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.app-shell .statistics-editor input:not([type=checkbox]) { width: 100%; min-width: 58px; height: 42px; padding: 8px 10px; border: 1px solid var(--stats-border); border-radius: 7px; background: var(--stats-inset); color: var(--stats-text); font: inherit; font-size: .95rem; box-shadow: none; }
+.app-shell .statistics-editor input::placeholder { color: var(--stats-muted); }
+.app-shell .statistics-editor input[type=number] { max-width: 84px; text-align: center; font-variant-numeric: tabular-nums; }
+.app-shell .statistics-editor label { color: var(--stats-text); font-size: .88rem; font-weight: 550; }
+.app-shell .statistics-editor .stats-checkbox { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.app-shell .statistics-editor input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 18px; margin: 0; accent-color: #087db8; }
+.stats-score-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+.stats-score-inputs label { display: grid; gap: 8px; }
+.app-shell .statistics-editor .stats-score-inputs input { max-width: none; height: 56px; font-size: 1.5rem; font-weight: 650; }
+.stats-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--stats-border); }
+.app-shell .statistics-editor .stats-visibility-help { margin-top: 6px; max-width: 55ch; font-size: .8rem; }
+.app-shell .statistics-editor .back-button,
+.app-shell .statistics-editor .submit-button { min-height: 40px; padding: 9px 14px; border: 1px solid var(--stats-border); border-radius: 8px; background: var(--stats-inset); color: var(--stats-text); font-size: .85rem; font-weight: 650; box-shadow: none; backdrop-filter: none; transform: none; }
+.app-shell .statistics-editor fieldset > .back-button { margin-top: 14px; color: var(--stats-accent); }
+.app-shell .statistics-editor .submit-button { background: #0875ad; border-color: #0875ad; color: #fff; white-space: nowrap; }
+.app-shell .statistics-editor button:hover:not(:disabled) { filter: brightness(1.12); }
+.app-shell .statistics-editor button:disabled { opacity: .5; cursor: default; }
+.app-shell .statistics-editor :is(input, button, summary):focus-visible { outline: 3px solid #38bdf8; outline-offset: 3px; }
+.app-shell .statistics-editor .stats-empty { color: var(--stats-muted); padding: 24px 8px; line-height: 1.6; }
+.stats-preview { margin-top: 22px; border-top: 1px solid var(--stats-border); padding-top: 16px; }
+.stats-preview summary { cursor: pointer; color: var(--stats-accent); font-size: .88rem; font-weight: 600; }
+.app-shell .match-statistics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 24px 0; }
+.stats-card { padding: 20px; background: var(--stats-surface); border: 1px solid var(--stats-border); border-radius: 12px; min-width: 0; }
+.stats-last-match { grid-column: 1 / -1; }
+.app-shell .match-statistics h2 { margin: 0 0 16px; color: var(--stats-text); font-size: 1.1rem; }
+.app-shell .stats-table-scroll td { overflow-wrap: anywhere; }
 .team-count-control select { min-width: 80px; padding: .7rem; border-radius: 8px; }
+@media (max-width: 900px) { .stats-editor-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .stats-editor-header, .stats-editor-footer { flex-direction: column; align-items: stretch; }
+  .stats-visibility-badge { align-self: flex-start; }
+  .app-shell .match-statistics { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .stats-table-scroll table { display: table; }
+  .app-shell .stats-table-scroll thead { display: table-header-group; position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
+  .app-shell .stats-table-scroll tbody { display: table-row-group; }
+  .app-shell .stats-table-scroll tr { display: table-row; }
+  .app-shell .stats-table-scroll :is(th, td) { display: table-cell; width: auto; padding: 10px 6px; }
+  .app-shell .stats-table-scroll td::before { display: none; }
+  .app-shell .statistics-editor fieldset { padding: 12px; }
+  .app-shell .statistics-editor .stats-table-scroll table { min-width: 420px; }
+}
