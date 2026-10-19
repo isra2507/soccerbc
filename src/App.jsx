@@ -807,8 +807,9 @@ function PublicPage({ dataError, match, refreshState, teams }) {
       <AnnouncementBanner match={match} />
       <section className="discord-invite" aria-labelledby="discord-title">
         <div>
+          <p className="public-panel-eyebrow">Stay connected</p>
           <h2 id="discord-title">Join our Discord group</h2>
-          <a href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer">Join our Discord group</a>
+          <a className="discord-join-button" href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer">Join Discord</a>
           <p>Scan the QR code to connect with the club.</p>
         </div>
         <a href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer" aria-label="Join our Discord group using this QR code">
@@ -817,12 +818,13 @@ function PublicPage({ dataError, match, refreshState, teams }) {
       </section>
       <section className="hero-panel">
         <div className="hero-copy">
+          <p className="public-panel-eyebrow">Everyone is welcome</p>
           <h1>Bellevue College Soccer Club</h1>
           <p className="hero-text">
-            <strong>We meet every Friday at 11:00 AM on the Bellevue College soccer field.
+            <strong>We meet every Friday at 10:45 AM on the Bellevue College soccer field.</strong>
               Everyone is welcome! All genders and skill levels can join, even if you have never played soccer before.
               Please be on time, register only if you are coming, and check which team you’re on before coming onto the field.
-              Don’t forget to have fun!</strong>
+              Don’t forget to have fun!
           </p>
           <p className="club-contact">
             Have a question or concern, or need your name removed because you can’t make it?

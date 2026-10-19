@@ -184,8 +184,8 @@ try {
   const { writeFile: writeStatsScreenshot } = await import('node:fs/promises')
   for (const theme of ['light', 'dark']) {
     await evaluate(`document.querySelector('.app-shell').classList.toggle('dark-mode', ${theme === 'dark'}); document.querySelector('.statistics-editor').scrollIntoView({ block: 'start' })`)
-    await new Promise((resolve) => setTimeout(resolve, 250))
-    assert.equal(await evaluate("getComputedStyle(document.querySelector('.statistics-editor input')).color"), theme === 'dark' ? 'rgb(237, 245, 252)' : 'rgb(22, 48, 71)')
+    const expectedColor = theme === 'dark' ? 'rgb(237, 245, 252)' : 'rgb(22, 48, 71)'
+    await waitForExpression(`getComputedStyle(document.querySelector('.statistics-editor input')).color === '${expectedColor}'`, 'Theme colors did not finish transitioning.')
     const screenshot = await send('Page.captureScreenshot', { format: 'png' })
     await writeStatsScreenshot(join(screenshotDirectory, `statistics-${theme}.png`), Buffer.from(screenshot.data, 'base64'))
   }
