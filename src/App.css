@@ -1975,3 +1975,22 @@ tr:last-child td {
 .game-notice:focus .game-notice-scroll { animation-play-state: paused; }
 @media (max-width: 600px) { .discord-invite { flex-direction: column; align-items: flex-start; } }
 @media (prefers-reduced-motion: reduce) { .game-notice-scroll { width: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 16px; animation: none; } }
+
+.match-statistics, .statistics-editor {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border: 1px solid #89a5b8;
+  border-radius: 16px;
+  background: var(--panel-bg, #f5f9fc);
+  color: #132f44;
+}
+.match-statistics { display: grid; gap: 1.25rem; }
+.stats-table-scroll { overflow-x: auto; }
+.match-statistics table, .statistics-editor table { width: 100%; border-collapse: collapse; }
+.match-statistics th, .match-statistics td, .statistics-editor th, .statistics-editor td { padding: .65rem; text-align: left; border-bottom: 1px solid #abc0cd; }
+.statistics-editor fieldset { min-width: 0; margin: 1rem 0; border: 1px solid #89a5b8; border-radius: 8px; }
+.statistics-editor input:not([type=checkbox]) { box-sizing: border-box; width: 100%; min-width: 75px; padding: .6rem; }
+.statistics-editor input[type=checkbox] { width: auto; margin-right: .6rem; }
+.stats-checkbox { display: flex; align-items: center; gap: .4rem; }
+.stats-score-inputs { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
+.team-count-control select { min-width: 80px; padding: .7rem; border-radius: 8px; }

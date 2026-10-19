@@ -1,3 +1,4 @@
+import { normalizeStatistics } from './statistics.js'
 import {
   clearStaffToken,
   getStaffAuthorization,
@@ -160,6 +161,7 @@ function normalizeState(rawState) {
     ...emptyState.match,
     ...(state.match && typeof state.match === 'object' ? state.match : {}),
     teamCount,
+    statistics: normalizeStatistics(state.match?.statistics),
     announcement: String(state.match?.announcement || '').trim().slice(0, 1000),
     captains: normalizeCaptains(state.match?.captains),
     pastGames: normalizePastGames(state.match?.pastGames),

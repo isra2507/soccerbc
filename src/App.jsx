@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { MatchStats, MatchStatsEditor } from './MatchStats.jsx'
 import { getActiveAnnouncement } from './announcements.js'
 import {
   addPlayer,
@@ -845,6 +846,7 @@ function PublicPage({ dataError, match, refreshState, teams }) {
         />
       </section>
 
+      <MatchStats statistics={match?.statistics} />
       <BalanceGuide />
 
       {dataError ? <p className="system-alert">{dataError}</p> : null}
@@ -1221,7 +1223,7 @@ function StaffPage({ rosterState, refreshState, onBack }) {
       <StaffLogin
         pastGames={rosterState.match?.pastGames}
         onBack={onBack}
-        onAuthenticated={() => setAuthenticated(true)}
+        onAuthenticated={async () => { await refreshState(); setAuthenticated(true) }}
       />
     )
   }
@@ -1254,7 +1256,7 @@ function StaffLogin({ pastGames, onBack, onAuthenticated }) {
 
     try {
       await authenticateStaff(password)
-      onAuthenticated()
+      await onAuthenticated()
     } catch (loginError) {
       setError(loginError.message)
     } finally {
@@ -1665,23 +1667,14 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
           <h1>Manage teams and the next soccer date.</h1>
         </div>
         <div className="match-settings">
-          <fieldset className="team-count-control">
-            <legend>Number of teams</legend>
-            <div className="team-count-options">
-              {TEAM_COUNT_OPTIONS.map((option) => (
-                <button
-                  className="team-count-button"
-                  type="button"
-                  aria-pressed={teamCount === option}
-                  disabled={!rosterState.match}
-                  key={option}
-                  onClick={() => handleTeamCountChange(option)}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          <label className="team-count-control">
+            <span>Number of teams</span>
+            <select aria-label="Number of teams" value={teamCount}
+              disabled={!rosterState.match}
+              onChange={(event) => handleTeamCountChange(Number(event.target.value))}>
+              {TEAM_COUNT_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </label>
           <form className="date-form" onSubmit={handleMatchSubmit}>
             <label>
               <span>Next soccer date and time</span>
@@ -1700,6 +1693,8 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
 
       <section className="member-scroll-panel">
         {saving ? <p className="form-notice admin-notice">{saving}</p> : null}
+
+        <MatchStatsEditor match={rosterState.match} staffName={staffName} refreshState={refreshState} />
 
         <form className="announcement-editor" onSubmit={(event) => {
           event.preventDefault()

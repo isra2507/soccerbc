@@ -149,6 +149,7 @@ try {
   const state = {
     players,
     match: {
+      statistics: { public: false, players: [{ id: 'alex', name: 'Alex', goals: 3, assists: 2 }], lastMatch: { recorded: true, penny: 4, noPenny: 1 } },
       teamCount: 2,
       nextMatchAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       updatedAt: '',
@@ -170,11 +171,35 @@ try {
     'The staff dashboard did not finish loading the roster.',
   )
   assert.equal(await evaluate("document.querySelectorAll('.team-table').length"), 2)
+  assert.equal(await evaluate("document.querySelector('select[aria-label=\"Number of teams\"]').value"), '2')
+  await evaluate(`
+    const goalsInput = document.querySelector('input[aria-label="Player 1 goals"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(goalsInput, '5');
+    goalsInput.dispatchEvent(new Event('input', { bubbles: true }));
+    [...document.querySelectorAll('.statistics-editor input[type=checkbox]')].at(-1).click();
+  `)
+  await evaluate("document.querySelector('.statistics-editor button[type=submit]').click()")
+  await waitForExpression("document.querySelector('.statistics-editor [role=status]')?.textContent.includes('visible to the public')", 'Statistics did not save.')
+  await evaluate("location.hash = '/'")
+  await waitForExpression("document.querySelector('.signup-panel') !== null", 'Public page did not open.')
+  assert.equal(await evaluate("document.querySelector('.match-statistics').textContent.includes('Penny won by 3 goals')"), true)
+  assert.equal(await evaluate("document.querySelector('.match-statistics tbody tr').textContent"), 'Alex5')
+  await evaluate("location.hash = '/staff'")
+  await waitForExpression("document.querySelector('.statistics-editor') !== null", 'Member statistics editor did not open.')
+  await evaluate("[...document.querySelectorAll('.statistics-editor input[type=checkbox]')].at(-1).click()")
+  await evaluate("document.querySelector('.statistics-editor button[type=submit]').click()")
+  await waitForExpression("document.querySelector('.statistics-editor [role=status]')?.textContent.includes('members only')", 'Statistics did not become private.')
+  await evaluate("location.hash = '/'")
+  await waitForExpression("document.querySelector('.signup-panel') !== null", 'Public page did not open.')
+  assert.equal(await evaluate("document.querySelector('.match-statistics') === null"), true)
+  await evaluate("location.hash = '/staff'")
+  await waitForExpression("document.querySelector('.statistics-editor') !== null", 'Member dashboard did not reopen.')
+
 
   await evaluate(`
-    [...document.querySelectorAll('.team-count-button')]
-      .find((button) => button.textContent.trim() === '4')
-      .click()
+    const select = document.querySelector('select[aria-label="Number of teams"]');
+    select.value = '4';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
   `)
   await waitForExpression(
     "document.querySelector('.admin-notice')?.textContent.includes('4 balanced teams')",

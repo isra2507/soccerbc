@@ -1,3 +1,22 @@
+function normalizeStatistics(value) {
+  const count = (number) => Number.isSafeInteger(Number(number)) && Number(number) >= 0 ? Number(number) : 0
+  return {
+    public: value?.public === true,
+    players: (Array.isArray(value?.players) ? value.players : []).map((player, index) => ({
+      id: String(player?.id || `stat-${index}`),
+      name: String(player?.name || '').trim().slice(0, 100),
+      goals: count(player?.goals),
+      assists: count(player?.assists),
+    })).filter((player) => player.name),
+    lastMatch: {
+      recorded: value?.lastMatch?.recorded === true,
+      penny: count(value?.lastMatch?.penny),
+      noPenny: count(value?.lastMatch?.noPenny),
+    },
+  }
+}
+
+
 import {
   createHmac,
   pbkdf2Sync,
@@ -273,6 +292,7 @@ function normalizeMatch(match) {
     ...emptyState.match,
     ...(match && typeof match === 'object' ? match : {}),
     teamCount: normalizeTeamCount(match?.teamCount),
+    statistics: normalizeStatistics(match?.statistics),
     announcement: String(match?.announcement || '').trim().slice(0, 1000),
     captains: normalizeCaptains(match?.captains),
     pastGames: normalizePastGames(match?.pastGames),
@@ -676,7 +696,11 @@ export const handler = async (event) => {
     }
 
     if (method === 'GET' && path === '/state') {
-      return jsonResponse(200, await readCurrentState())
+      const state = await readCurrentState()
+      if (!hasValidStaffToken(event) && !state.match.statistics.public) {
+        state.match.statistics = normalizeStatistics()
+      }
+      return jsonResponse(200, state)
     }
 
     if (method === 'POST' && path === '/players') {
