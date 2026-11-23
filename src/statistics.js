@@ -22,3 +22,12 @@ export function matchResult(lastMatch) {
   if (difference === 0) return 'Draw'
   return `${difference > 0 ? 'Penny' : 'No penny'} won by ${Math.abs(difference)} ${Math.abs(difference) === 1 ? 'goal' : 'goals'}`
 }
+
+export function resetStatistics(statistics) {
+  const current = normalizeStatistics(statistics)
+  return {
+    ...current,
+    players: current.players.map((player) => ({ ...player, goals: 0, assists: 0 })),
+    lastMatch: { recorded: false, penny: 0, noPenny: 0 },
+  }
+}

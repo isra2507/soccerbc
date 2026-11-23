@@ -10,6 +10,7 @@ import {
   balanceTeamAssignments,
   getActiveTeamKeys,
   normalizeCaptains,
+  normalizePosition,
   normalizeTeamCount,
   resolveCaptains,
   sanitizeTeam,
@@ -74,6 +75,7 @@ const sanitizePlayer = (player, fallbackId) => ({
   firstName: String(player?.firstName || '').trim(),
   lastName: String(player?.lastName || '').trim(),
   skill: String(player?.skill || 'beginner'),
+  position: normalizePosition(player?.position),
   team: sanitizeTeam(player?.team),
   manualTeam: player?.manualTeam === true,
   joinedAt: String(player?.joinedAt || ''),
@@ -86,6 +88,7 @@ const sanitizePastGamePlayer = (player, fallbackId) => ({
   firstName: String(player?.firstName || '').trim(),
   lastName: String(player?.lastName || '').trim(),
   skill: String(player?.skill || 'beginner'),
+  position: normalizePosition(player?.position),
   team: sanitizeTeam(player?.team),
 })
 
@@ -486,19 +489,15 @@ export function subscribeState(onChange, onError) {
   refresh()
 
   const storageHandler = (event) => {
-    if (event.key === LOCAL_STORAGE_KEY) {
+    if (!hasSharedDatabase && event.key === LOCAL_STORAGE_KEY) {
       refresh()
     }
   }
 
-  const interval = hasSharedDatabase ? window.setInterval(refresh, 4000) : null
   window.addEventListener('storage', storageHandler)
 
   return () => {
     active = false
-    if (interval) {
-      window.clearInterval(interval)
-    }
     window.removeEventListener('storage', storageHandler)
   }
 }

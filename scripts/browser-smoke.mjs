@@ -143,6 +143,7 @@ try {
     firstName: `Player${index + 1}`,
     lastName: 'Smoke',
     skill: ['professional', 'semi-pro', 'intermediate', 'beginner'][index % 4],
+    position: ['defender', 'goalkeeper', 'midfield', 'striker'][index % 4],
     team: 'penny',
     joinedAt: new Date(2026, 0, index + 1).toISOString(),
   }))
@@ -212,6 +213,21 @@ try {
   await evaluate("location.hash = '/staff'")
   await waitForExpression("document.querySelector('.statistics-editor') !== null", 'Member dashboard did not reopen.')
 
+  const beforeReset = await evaluate("localStorage.getItem('bc-soccer-live-board')")
+  await evaluate(`
+    window.confirm = (message) => { window.resetConfirmation = message; return false; };
+    document.querySelector('.stats-reset-button').click();
+  `)
+  assert.equal(await evaluate("localStorage.getItem('bc-soccer-live-board')"), beforeReset)
+  assert.ok(await evaluate("window.resetConfirmation.includes('Are you sure')"))
+  await evaluate("window.confirm = () => true; document.querySelector('.stats-reset-button').click()")
+  await waitForExpression("document.querySelector('.statistics-editor [role=status]')?.textContent.includes('Statistics reset')", 'Statistics reset did not save.')
+  assert.deepEqual(await evaluate("JSON.parse(localStorage.getItem('bc-soccer-live-board')).match.statistics"), {
+    public: false,
+    players: [{ id: 'alex', name: 'Alex', goals: 0, assists: 0 }],
+    lastMatch: { recorded: false, penny: 0, noPenny: 0 },
+  })
+
 
   await evaluate(`
     const select = document.querySelector('select[aria-label="Number of teams"]');
@@ -229,13 +245,15 @@ try {
 
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.team-table')].map(t => t.dataset.teamColor)"), ['none', 'blue', 'red', 'yellow'])
   await evaluate(`
-    const move = document.querySelector('select[aria-label^="Move "]');
-    move.value = 'team4';
+    const row = [...document.querySelectorAll('.team-table tbody tr')].find(row => row.querySelector('input[aria-label="First name"]')?.value === 'Player1');
+    const move = row.querySelector('select[aria-label^="Move "]');
+    window.smokeMoveTarget = [...move.options].find(option => option.value).value;
+    move.value = window.smokeMoveTarget;
     move.dispatchEvent(new Event('change', { bubbles: true }));
   `)
-  await waitForExpression("document.querySelector('.team-table[data-team-color=yellow]').textContent.includes('Player1')", 'Manual move did not update the draft.')
+  await waitForExpression("[...document.querySelectorAll('.team-table input[aria-label=\"First name\"]')].find(input => input.value === 'Player1').closest('.team-table').querySelector('h2').id === window.smokeMoveTarget + '-title'", 'Manual move did not update the draft.')
   await evaluate("document.querySelector('section.roster-actions .submit-button').click()")
-  await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.find(p => p.id === 'smoke-1').team === 'team4'", 'Manual move did not persist.')
+  await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.find(p => p.id === 'smoke-1').team === window.smokeMoveTarget", 'Manual move did not persist.')
   await evaluate("[...document.querySelectorAll('section.roster-actions button')].find(b => b.textContent.trim() === 'Rebalance teams').click()")
   await evaluate("document.querySelector('section.roster-actions .submit-button').click()")
   await waitForExpression("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.every(p => !p.manualTeam)", 'Rebalance did not clear manual assignments.')
@@ -289,7 +307,7 @@ try {
   )
   assert.equal(await evaluate("document.querySelectorAll('.team-table').length"), 4)
   assert.ok(await evaluate("document.querySelector('.game-notice').textContent.includes('Bring water for Friday.')"))
-  assert.equal(await evaluate("document.querySelector('.discord-invite a').href"), 'https://discord.gg/NeyphJrqW')
+  assert.equal(await evaluate("document.querySelector('.discord-invite a').href"), 'https://discord.gg/bqSvkQpxz')
   assert.ok(await evaluate("document.querySelector('.discord-invite img').naturalWidth > 0"))
   assert.equal(await evaluate("document.querySelectorAll('.club-contact a[href^=\"mailto:\"]').length"), 2)
 
@@ -305,6 +323,14 @@ try {
     setValue(document.querySelector('.signup-panel select'), 'professional');
     document.querySelector('.signup-panel').requestSubmit();
   `)
+  assert.equal(await evaluate("document.querySelector('select[aria-label=Position]').validity.valueMissing"), true)
+  assert.equal(await evaluate("JSON.parse(localStorage.getItem('bc-soccer-live-board')).players.length"), players.length)
+  await evaluate(`
+    const position = document.querySelector('select[aria-label="Position"]');
+    position.value = 'goalkeeper';
+    position.dispatchEvent(new Event('change', { bubbles: true }));
+  `)
+  await evaluate("document.querySelector('.signup-panel').requestSubmit()")
   await waitForExpression(
     "document.querySelector('.signup-panel .form-notice')?.textContent.includes('You were added')",
     'A new public signup was not saved.',
@@ -321,6 +347,10 @@ try {
   )
 
   assert.equal(finalState.players.length, players.length + 1)
+  assert.equal(finalState.players.find((player) => player.firstName === 'New').position, 'goalkeeper')
+  const keeperCounts = ['penny', 'withoutPenny', 'team3', 'team4'].map((team) => finalState.players.filter((player) => player.team === team && player.position === 'goalkeeper').length)
+  assert.deepEqual(keeperCounts, [1, 1, 1, 1])
+  assert.equal(await evaluate("document.querySelectorAll('.team-table td[data-label=Position]').length"), players.length + 1)
   assert.equal(new Set(finalState.players.map((player) => player.team)).size, 4)
   assert.ok(Math.max(...teamCounts) - Math.min(...teamCounts) <= 1)
   assert.equal(

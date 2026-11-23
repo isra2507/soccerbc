@@ -13,17 +13,21 @@ import {
 } from './dataStore'
 import {
   TEAM_COUNT_OPTIONS,
+  PLAYER_POSITIONS,
   balanceTeamAssignments,
   getActiveTeamKeys,
   getSkillValue,
+  getPositionLabel,
   groupPlayersByTeam,
   normalizeCaptains,
+  normalizePosition,
   normalizeTeamCount,
   resolveCaptains,
   sanitizeTeam,
 } from './teamLogic.js'
 
 const DARK_MODE_KEY = 'bcSoccerDarkMode'
+const DISCORD_INVITE_URL = 'https://discord.gg/bqSvkQpxz'
 const MENU_BALLS = Array.from({ length: 16 }, (_, index) => ({
   id: index,
   delay: `${(index % 8) * 0.42}s`,
@@ -124,7 +128,7 @@ const BALANCE_EXAMPLES = [
 ]
 
 const DATA_STATUS_LABELS = {
-  cloud: 'Live online board',
+  cloud: 'Online board · refresh for updates',
   local: 'Local saved board',
   'missing-cloud': 'Shared database needed',
 }
@@ -247,6 +251,7 @@ const sanitizePastGamePlayer = (player, fallbackId) => ({
   firstName: String(player?.firstName || '').trim(),
   lastName: String(player?.lastName || '').trim(),
   skill: String(player?.skill || 'beginner'),
+  position: normalizePosition(player?.position),
   team: sanitizeTeam(player?.team),
 })
 
@@ -375,7 +380,7 @@ function useCountdown(targetDate) {
 
   const difference = target - now
   if (difference <= -GAME_HOLD_MS) {
-    return 'Refreshing the board'
+    return 'Game finished. Refresh for updates.'
   }
 
   if (difference <= 0) {
@@ -484,6 +489,9 @@ function App() {
   }, [])
 
   useEffect(() => {
+    // The shared API handles expired games when the board is loaded. Keep
+    // open cloud pages idle until a visitor refreshes or submits a change.
+    if (rosterState.mode !== 'local') return
     const resetTime = getMatchResetTime(rosterState.match?.nextMatchAt)
 
     if (!resetTime || gameLifecycleSyncing.current) {
@@ -519,7 +527,7 @@ function App() {
       .finally(() => {
         gameLifecycleSyncing.current = false
       })
-  }, [rosterState.match, rosterState.players])
+  }, [rosterState.match, rosterState.players, rosterState.mode])
 
   const teams = useMemo(
     () =>
@@ -809,10 +817,10 @@ function PublicPage({ dataError, match, refreshState, teams }) {
         <div>
           <p className="public-panel-eyebrow">Stay connected</p>
           <h2 id="discord-title">Join our Discord group</h2>
-          <a className="discord-join-button" href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer">Join Discord</a>
+          <a className="discord-join-button" href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">Join Discord</a>
           <p>Scan the QR code to connect with the club.</p>
         </div>
-        <a href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer" aria-label="Join our Discord group using this QR code">
+        <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer" aria-label="Join our Discord group using this QR code">
           <img src="/discord-qr.svg" width="160" height="160" alt="QR code for the Bellevue College Soccer Club Discord group" />
         </a>
       </section>
@@ -828,7 +836,7 @@ function PublicPage({ dataError, match, refreshState, teams }) {
           </p>
           <p className="club-contact">
             Have a question or concern, or need your name removed because you can’t make it?
-            Send us a message in our <a href="https://discord.gg/NeyphJrqW" target="_blank" rel="noopener noreferrer">Discord group</a>.
+            Send us a message in our <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">Discord group</a>.
             If you don’t have Discord, email <a href="mailto:isra.sookun@bellevuecollege.edu">isra.sookun@bellevuecollege.edu</a> or{' '}
             <a href="mailto:ro.sanchezrodriguez@bellevuecollege.edu">ro.sanchezrodriguez@bellevuecollege.edu</a>.
           </p>
@@ -863,6 +871,7 @@ function RegistrationForm({ refreshState, registrationOpen }) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [skill, setSkill] = useState('')
+  const [position, setPosition] = useState('')
   const [notice, setNotice] = useState('')
   const [saving, setSaving] = useState(false)
   const formDisabled = saving || !registrationOpen
@@ -878,8 +887,8 @@ function RegistrationForm({ refreshState, registrationOpen }) {
     const cleanFirstName = normalizeName(firstName)
     const cleanLastName = normalizeName(lastName)
 
-    if (!cleanFirstName || !cleanLastName || !skill) {
-      setNotice('Enter your first name, last name, and skill level.')
+    if (!cleanFirstName || !cleanLastName || !skill || !normalizePosition(position)) {
+      setNotice('Enter your first name, last name, skill level, and position.')
       return
     }
 
@@ -888,6 +897,7 @@ function RegistrationForm({ refreshState, registrationOpen }) {
       firstName: cleanFirstName,
       lastName: cleanLastName,
       skill,
+      position,
       team: 'penny',
       joinedAt: new Date().toISOString(),
     }
@@ -899,7 +909,8 @@ function RegistrationForm({ refreshState, registrationOpen }) {
       setFirstName('')
       setLastName('')
       setSkill('')
-      setNotice('You were added. The table rebalanced by skill score.')
+      setPosition('')
+      setNotice('You were added. Teams were balanced by skill and position.')
     } catch (error) {
       setNotice(error.message)
     } finally {
@@ -924,6 +935,7 @@ function RegistrationForm({ refreshState, registrationOpen }) {
         <span>First name</span>
         <input
           autoComplete="given-name"
+          required
           disabled={formDisabled}
           value={firstName}
           onChange={(event) => setFirstName(event.target.value)}
@@ -935,6 +947,7 @@ function RegistrationForm({ refreshState, registrationOpen }) {
         <span>Last name</span>
         <input
           autoComplete="family-name"
+          required
           disabled={formDisabled}
           value={lastName}
           onChange={(event) => setLastName(event.target.value)}
@@ -947,6 +960,7 @@ function RegistrationForm({ refreshState, registrationOpen }) {
         <select
           disabled={formDisabled}
           value={skill}
+          required
           onChange={(event) => setSkill(event.target.value)}
         >
           <option value="">Choose your skill level</option>
@@ -954,6 +968,22 @@ function RegistrationForm({ refreshState, registrationOpen }) {
             <option key={level.value} value={level.value}>
               {level.label}
             </option>
+          ))}
+        </select>
+      </label>
+
+      <label>
+        <span>Position</span>
+        <select
+          aria-label="Position"
+          disabled={formDisabled}
+          required
+          value={position}
+          onChange={(event) => setPosition(event.target.value)}
+        >
+          <option value="">Choose your position</option>
+          {PLAYER_POSITIONS.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </select>
       </label>
@@ -977,6 +1007,9 @@ function BalanceGuide() {
           Beginner counts as 1 point, Intermediate as 2, Semi-pro as 3, and
           Professional as 4. The table is recalculated whenever a new player
           joins or staff changes the roster, keeping every active team close.
+          Goalkeepers are spread across teams first; extra keepers are shared
+          as evenly as possible. Field positions help break ties between teams
+          with the same player count and skill score.
           Captains are picked by skill priority: Semi-pro, then Professional,
           then Intermediate, then Beginner.
         </p>
@@ -1114,13 +1147,14 @@ function TeamTable({
               <th>No.</th>
               <th>Name</th>
               <th>Skill level</th>
+              <th>Position</th>
               {editable ? <><th>Move to team</th><th>Remove</th></> : null}
             </tr>
           </thead>
           <tbody>
             {players.length === 0 ? (
               <tr>
-                <td colSpan={editable ? 5 : 3} className="empty-cell">
+                <td colSpan={editable ? 6 : 4} className="empty-cell">
                   No players yet
                 </td>
               </tr>
@@ -1174,6 +1208,20 @@ function TeamTable({
                     ) : (
                       getSkillLabel(player.skill)
                     )}
+                  </td>
+                  <td data-label="Position">
+                    {editable ? (
+                      <select
+                        aria-label={`Position for ${getPlayerName(player)}`}
+                        value={player.position || ''}
+                        onChange={(event) => onPlayerChange(player.id, { position: event.target.value })}
+                      >
+                        <option value="" disabled>Choose position</option>
+                        {PLAYER_POSITIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : getPositionLabel(player.position)}
                   </td>
                   {editable ? (
                     <td data-label="Move to team">
@@ -1353,7 +1401,7 @@ function PastGameTeam({ game, teamKey }) {
           {players.map((player) => (
             <li key={player.id}>
               <span>{getPlayerName(player)}</span>
-              <em>{getSkillLabel(player.skill)}</em>
+              <em>{getSkillLabel(player.skill)} · {getPositionLabel(player.position)}</em>
             </li>
           ))}
         </ol>
@@ -1545,7 +1593,7 @@ function StaffDashboard({ rosterState, staffName, refreshState, onBack }) {
       players.map((player) => ({ ...player, manualTeam: false })), teamCount,
     ))
     setRosterDirty(true)
-    setSaving('Draft rebalanced by skill score. Save roster changes to publish it.')
+    setSaving('Draft rebalanced by skill and position. Save roster changes to publish it.')
   }
 
   const handleTeamCountChange = async (nextTeamCount) => {

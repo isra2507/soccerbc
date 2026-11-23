@@ -6,6 +6,8 @@ import {
   getSkillValue,
   groupPlayersByTeam,
   normalizeTeamCount,
+  normalizePosition,
+  getPositionLabel,
 } from '../src/teamLogic.js'
 
 const skills = ['professional', 'semi-pro', 'intermediate', 'beginner']
@@ -94,4 +96,41 @@ test('a manual assignment to a disabled team is released', () => {
   const balanced = balanceTeamAssignments(players, 3)
   assert.ok(getActiveTeamKeys(3).includes(balanced[0].team))
   assert.equal(balanced[0].manualTeam, false)
+})
+
+for (const teamCount of [2, 3, 4]) {
+  test(`spreads any number of keepers across ${teamCount} teams, including manual conflicts`, () => {
+    for (let keeperCount = 0; keeperCount <= 12; keeperCount += 1) {
+      for (const manualTeam of [false, true]) {
+        const players = makePlayers(23).map((player, index) => ({
+          ...player,
+          position: index < keeperCount ? 'goalkeeper' : ['defender', 'midfield', 'striker'][index % 3],
+          manualTeam: index < keeperCount && manualTeam,
+        }))
+        const balanced = balanceTeamAssignments(players, teamCount)
+        const groups = Object.values(groupPlayersByTeam(balanced, teamCount))
+        const keepers = groups.map((team) => team.filter((player) => player.position === 'goalkeeper').length)
+        const counts = groups.map((team) => team.length)
+        assert.ok(Math.max(...keepers) - Math.min(...keepers) <= 1)
+        assert.ok(Math.max(...counts) - Math.min(...counts) <= 1)
+        assert.equal(balanced.length, players.length)
+        assert.deepEqual(balanceTeamAssignments(balanced, teamCount), balanced)
+      }
+    }
+  })
+}
+
+test('field positions break ties when team counts and skill scores match', () => {
+  const players = makePlayers(4).map((player, index) => ({
+    ...player, skill: 'intermediate', position: index < 2 ? 'defender' : 'striker',
+  }))
+  const groups = Object.values(groupPlayersByTeam(balanceTeamAssignments(players)))
+  assert.ok(groups.every((team) => new Set(team.map((player) => player.position)).size === 2))
+})
+
+test('legacy players keep an unset position without being assigned a false role', () => {
+  assert.equal(normalizePosition('unknown'), '')
+  assert.equal(normalizePosition(undefined), '')
+  assert.equal(getPositionLabel(''), 'Not set')
+  assert.equal(getPositionLabel('goalkeeper'), 'Goalkeeper')
 })

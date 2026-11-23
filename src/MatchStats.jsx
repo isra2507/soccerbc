@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { updateMatch } from './dataStore'
-import { matchResult, normalizeStatistics } from './statistics.js'
+import { matchResult, normalizeStatistics, resetStatistics } from './statistics.js'
 
 export function MatchStats({ statistics, member = false }) {
   const stats = normalizeStatistics(statistics)
@@ -39,14 +39,22 @@ export function MatchStatsEditor({ match, staffName, refreshState }) {
       setNotice('Enter a name for every player, or remove the empty row.')
       return
     }
+    await persist(draft, draft.public ? 'Statistics saved and visible to the public.' : 'Statistics saved for members only.')
+  }
+  async function persist(statistics, message) {
     setSaving(true)
     try {
-      await updateMatch({ ...match, statistics: normalizeStatistics(draft), updatedAt: new Date().toISOString(), updatedBy: `${staffName.firstName} ${staffName.lastName}` })
+      await updateMatch({ ...match, statistics: normalizeStatistics(statistics), updatedAt: new Date().toISOString(), updatedBy: `${staffName.firstName} ${staffName.lastName}` })
       await refreshState()
+      setDraft(normalizeStatistics(statistics))
       setDirty(false)
-      setNotice(draft.public ? 'Statistics saved and visible to the public.' : 'Statistics saved for members only.')
+      setNotice(message)
     } catch (error) { setNotice(error.message) }
     finally { setSaving(false) }
+  }
+  async function reset() {
+    if (!window.confirm('Are you sure you want to reset all player goals and assists and clear the last match score? Player names will be kept. Unsaved statistics changes will be discarded. This cannot be undone.')) return
+    await persist(resetStatistics(match?.statistics), 'Statistics reset. Player totals are now zero and the last match score has been cleared.')
   }
   return <form className="statistics-editor" onSubmit={save}>
     <header className="stats-editor-header">
@@ -74,7 +82,10 @@ export function MatchStatsEditor({ match, staffName, refreshState }) {
     <div className="stats-editor-footer">
     <div><label className="stats-checkbox"><input type="checkbox" disabled={saving} checked={draft.public} onChange={(event) => change({ ...draft, public: event.target.checked })} />View to the public</label>
     <p className="stats-visibility-help">Show scorers, assists, and the last result on the public board after saving.</p></div>
-    <button className="submit-button" disabled={saving || !dirty} type="submit">{saving ? 'Saving statistics…' : 'Save statistics'}</button>
+    <div className="stats-editor-actions">
+      <button className="back-button stats-reset-button" disabled={saving} type="button" onClick={reset}>Reset statistics</button>
+      <button className="submit-button" disabled={saving || !dirty} type="submit">{saving ? 'Saving statistics…' : 'Save statistics'}</button>
+    </div>
     </div>
     {notice && <p className="form-notice" role="status">{notice}</p>}
     <details className="stats-preview"><summary>Preview public tables</summary><MatchStats statistics={draft} member /></details>
